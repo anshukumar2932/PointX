@@ -32,15 +32,27 @@ export const AuthProvider = ({ children }) => {
       const response = await api.post('/auth/login', { username, password });
       const { token, role } = response.data;
       
-      const userData = { username, role };
-      
+      // Set the token first
       localStorage.setItem('token', token);
-      localStorage.setItem('user', JSON.stringify(userData));
-      
       api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      setUser(userData);
       
-      return { success: true };
+      // Now fetch complete user data including user_id
+      try {
+        const userResponse = await api.get('/auth/me');
+        const userData = userResponse.data;
+        
+        localStorage.setItem('user', JSON.stringify(userData));
+        setUser(userData);
+        
+        return { success: true };
+      } catch (userError) {
+        // Fallback to basic user data if /me fails
+        const userData = { username, role };
+        localStorage.setItem('user', JSON.stringify(userData));
+        setUser(userData);
+        
+        return { success: true };
+      }
     } catch (error) {
       return { 
         success: false, 
@@ -56,10 +68,28 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   };
 
+  const refreshUser = async () => {
+    try {
+      const response = await api.get('/auth/me');
+      const userData = response.data;
+      
+      localStorage.setItem('user', JSON.stringify(userData));
+      setUser(userData);
+      
+      return { success: true };
+    } catch (error) {
+      return { 
+        success: false, 
+        error: error.response?.data?.error || 'Failed to refresh user data' 
+      };
+    }
+  };
+
   const value = {
     user,
     login,
     logout,
+    refreshUser,
     loading
   };
 

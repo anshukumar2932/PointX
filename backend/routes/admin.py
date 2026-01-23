@@ -281,14 +281,56 @@ def admin_topup(data):
 @require_auth(["admin"])
 def plays_view():
     """
-    Docstring for plays_view
+    Get all play transactions with visitor information
     """
     res = supabase.table("transactions") \
         .select("*") \
         .eq("type", "play") \
+        .order("created_at", desc=True) \
         .execute()
 
-    return jsonify(res.data), 200
+    # Enrich transactions with visitor usernames
+    enriched_plays = []
+    for play in res.data:
+        # Get visitor username from wallet
+        if play.get("from_wallet"):
+            visitor_wallet_res = supabase.table("wallets") \
+                .select("username, user_id") \
+                .eq("id", play["from_wallet"]) \
+                .execute()
+            
+            if visitor_wallet_res.data:
+                visitor_info = visitor_wallet_res.data[0]
+                visitor_username = visitor_info.get("username", "Unknown User")
+                visitor_id = visitor_info.get("user_id")
+            else:
+                visitor_username = "Unknown User"
+                visitor_id = None
+        else:
+            visitor_username = "Unknown User"
+            visitor_id = None
+        
+        # Get stall information
+        if play.get("to_wallet"):
+            stall_wallet_res = supabase.table("wallets") \
+                .select("username") \
+                .eq("id", play["to_wallet"]) \
+                .execute()
+            
+            stall_username = stall_wallet_res.data[0]["username"] if stall_wallet_res.data else "Unknown Stall"
+        else:
+            stall_username = "Unknown Stall"
+        
+        enriched_play = {
+            **play,
+            "visitor_username": visitor_username,
+            "visitor_id": visitor_id,
+            "stall_username": stall_username,
+            "visitor_wallet_short": play.get("from_wallet", "")[:8] if play.get("from_wallet") else "Unknown"
+        }
+        enriched_plays.append(enriched_play)
+
+    return jsonify(enriched_plays), 200
 
 
 @admin_bp.route("/attendance", methods=["POST"])
@@ -345,12 +387,26 @@ def freeze_wallet(wallet_id):
 @require_auth(["admin"])
 def pending_topups():
     res = supabase.table("topup_requests") \
-        .select("id, user_id, wallet_id, amount, image_path, created_at") \
+        .select("id, user_id, wallet_id, amount, image_path, created_at, wallets(username)") \
         .eq("status", "pending") \
         .order("created_at") \
         .execute()
 
-    return jsonify(res.data)
+    # Flatten the response to include username directly
+    formatted_data = []
+    for item in res.data:
+        formatted_item = {
+            "id": item["id"],
+            "user_id": item["user_id"],
+            "wallet_id": item["wallet_id"],
+            "amount": item["amount"],
+            "image_path": item["image_path"],
+            "created_at": item["created_at"],
+            "username": item["wallets"]["username"] if item.get("wallets") else "Unknown"
+        }
+        formatted_data.append(formatted_item)
+
+    return jsonify(formatted_data)
 
 @admin_bp.route("/topup-approve", methods=["POST"])
 @require_auth(["admin"])

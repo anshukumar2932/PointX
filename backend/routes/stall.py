@@ -30,12 +30,10 @@ def start_game():
         .select("id") \
         .eq("user_id", stall_user_id) \
         .execute()
-    print("STall id founding")
     if not wallet_res.data:
         return jsonify({"error": "Stall wallet not found"}), 404
 
     stall_wallet_id = wallet_res.data[0]["id"]
-    print("STall id found",stall_wallet_id)
     # 2️⃣ Get stall using wallet_id
     stall_res = supabase.table("stalls") \
         .select("id") \
@@ -108,21 +106,64 @@ def history():
 
     stall_id = stall_res.data[0]["id"]
 
-    # 3️⃣ Fetch transactions
+    # 3️⃣ Fetch transactions with visitor username
     res = supabase.table("transactions") \
         .select("id, from_wallet, to_wallet, points_amount, score, type, created_at") \
         .eq("stall_id", stall_id) \
         .order("created_at", desc=True) \
         .execute()
 
-    return jsonify(res.data), 200
+    # 4️⃣ Enrich with visitor usernames
+    enriched_transactions = []
+    for tx in res.data:
+        # Get visitor username from wallet
+        if tx.get("from_wallet"):
+            visitor_wallet_res = supabase.table("wallets") \
+                .select("username") \
+                .eq("id", tx["from_wallet"]) \
+                .execute()
+            
+            visitor_username = visitor_wallet_res.data[0]["username"] if visitor_wallet_res.data else "Unknown"
+        else:
+            visitor_username = "Unknown"
+        
+        enriched_tx = {
+            **tx,
+            "visitor_username": visitor_username
+        }
+        enriched_transactions.append(enriched_tx)
+
+    return jsonify(enriched_transactions), 200
+
+
+@stall_bp.route("/visitor-balance/<wallet_id>", methods=["GET"])
+@require_auth(["stall"])
+def get_visitor_balance(wallet_id):
+    """Get visitor balance by wallet ID for stall operators"""
+    try:
+        wallet_res = supabase.table("wallets") \
+            .select("balance, username, is_active") \
+            .eq("id", wallet_id) \
+            .single() \
+            .execute()
+
+        if not wallet_res.data:
+            return jsonify({"error": "Visitor wallet not found"}), 404
+
+        return jsonify({
+            "balance": wallet_res.data["balance"],
+            "username": wallet_res.data["username"],
+            "is_active": wallet_res.data["is_active"]
+        }), 200
+
+    except Exception as e:
+        return jsonify({"error": "Failed to fetch visitor balance"}), 500
 
 
 @stall_bp.route("/wallet", methods=["GET"])
 @require_auth(["stall"])
 def wallet():
     stall_user_id = request.user["id"]
-    print("Stall user id:", stall_user_id)
 
     # 1️⃣ Get wallet of stall user
     wallet_res = supabase.table("wallets") \

@@ -26,9 +26,9 @@ const Login = () => {
 
   return (
     <div className="container">
-      <div className="card" style={{ maxWidth: '400px', margin: '100px auto' }}>
-        <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-          <h1>🎮 Arcade Wallet</h1>
+      <div className="card" style={{ maxWidth: '400px', margin: '20px auto' }}>
+        <div className="text-center mb-lg">
+          <h1>PointX</h1>
           <p style={{ color: '#6b7280' }}>Sign in to your account</p>
         </div>
 
@@ -64,7 +64,11 @@ const Login = () => {
                 border: 'none',
                 cursor: 'pointer',
                 color: '#6b7280',
-                fontSize: '14px'
+                fontSize: '14px',
+                minHeight: '44px',
+                display: 'flex',
+                alignItems: 'center',
+                WebkitTapHighlightColor: 'transparent'
               }}
             >
               {showPassword ? 'Hide' : 'Show'}
@@ -75,27 +79,12 @@ const Login = () => {
 
           <button
             type="submit"
-            className="btn"
-            style={{ width: '100%' }}
+            className="btn btn-full"
             disabled={loading}
           >
             {loading ? 'Signing in...' : 'Sign In'}
           </button>
         </form>
-
-        <div
-          style={{
-            marginTop: '24px',
-            padding: '16px',
-            background: '#f9fafb',
-            borderRadius: '8px'
-          }}
-        >
-          <h4>Demo Accounts:</h4>
-          <p><strong>Admin:</strong> admin / admin123</p>
-          <p><strong>Stall:</strong> Create via admin panel</p>
-          <p><strong>Visitor:</strong> Create via admin panel</p>
-        </div>
       </div>
     </div>
   );

@@ -42,6 +42,7 @@ class LogoutResponseSchema(Schema):
 
 
 class MeResponseSchema(Schema):
+    user_id = fields.Str(metadata={"example": "123e4567-e89b-12d3-a456-426614174000"})
     username = fields.Str(metadata={"example": "admin"})
     role = fields.Str(metadata={"example": "admin"})
 

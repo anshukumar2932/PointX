@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback } from "react";
 import Papa from "papaparse";
 import { Html5QrcodeScanner } from "html5-qrcode";
+import QRDebugger from "./QRDebugger";
+import api from "../api/axios";
 
 import {
   createUser,
@@ -71,8 +73,22 @@ const AdminDashboard = () => {
     setLoading(true);
     try {
       if (["overview", "users", "wallets"].includes(activeTab)) {
-        const res = await getAllUsers();
-        setUsers(res.data || []);
+        // Get users with wallet data joined
+        const usersRes = await getAllUsers();
+        const walletsRes = await api.get("/admin/wallets");
+        
+        // Join user data with wallet data
+        const usersWithWallets = (usersRes.data || []).map(user => {
+          const wallet = (walletsRes.data || []).find(w => w.user_id === user.id);
+          return {
+            ...user,
+            balance: wallet?.balance || 0,
+            wallet_id: wallet?.id,
+            is_active: wallet?.is_active || false
+          };
+        });
+        
+        setUsers(usersWithWallets);
       }
 
       if (["overview", "plays"].includes(activeTab)) {
@@ -105,7 +121,7 @@ const AdminDashboard = () => {
   // Action helper with loading & error handling
   // ────────────────────────────────────────────────
 
-  const runAction = async (actionFn, successMessage) => {
+  const runAction = useCallback(async (actionFn, successMessage) => {
     setActionLoading(true);
     try {
       await actionFn();
@@ -122,7 +138,7 @@ const AdminDashboard = () => {
     } finally {
       setActionLoading(false);
     }
-  };
+  }, [loadData]);
 
   // ────────────────────────────────────────────────
   // QR Scanner (camera) – only when attendance tab is active
@@ -280,32 +296,41 @@ const AdminDashboard = () => {
   // ────────────────────────────────────────────────
 
   return (
-    <div style={{ padding: "20px", maxWidth: "1400px", margin: "0 auto" }}>
-      <h1>👑 Admin Dashboard</h1>
+    <div className="container">
+      <h1 className="text-center mb-lg">Admin Dashboard</h1>
 
-      <div style={{ margin: "20px 0", display: "flex", flexWrap: "wrap", gap: "10px" }}>
-        {["overview", "users", "wallets", "attendance", "plays", "topups", "leaderboard", "create"].map(tab => (
+      <div className="tab-nav">
+        {["overview", "users", "wallets", "attendance", "plays", "topups", "leaderboard", "create", "qr-debug"].map(tab => (
           <button
             key={tab}
-            className={`btn ${activeTab === tab ? "btn-primary" : "btn-secondary"}`}
+            className={`tab-button ${activeTab === tab ? "active" : ""}`}
             onClick={() => setActiveTab(tab)}
             disabled={isBusy}
           >
-            {tab.toUpperCase()}
+            {tab === "qr-debug" ? "QR Debug" : tab.charAt(0).toUpperCase() + tab.slice(1)}
           </button>
         ))}
       </div>
 
-      {isBusy && <p style={{ color: "#666" }}>Processing...</p>}
+      {isBusy && <div className="loading">Processing...</div>}
 
       {/* ──────────────────────────────────────────────── */}
       {/* OVERVIEW */}
       {/* ──────────────────────────────────────────────── */}
       {activeTab === "overview" && (
-        <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "20px" }}>
-          <div className="card stat-card"><h4>Total Users</h4><p className="stat-number">{users.length}</p></div>
-          <div className="card stat-card"><h4>Total Plays</h4><p className="stat-number">{plays.length}</p></div>
-          <div className="card stat-card"><h4>Pending Top-ups</h4><p className="stat-number">{topupRequests.length}</p></div>
+        <div className="grid grid-3">
+          <div className="card text-center">
+            <h4 className="mb-sm">Total Users</h4>
+            <div className="stat-value">{users.length}</div>
+          </div>
+          <div className="card text-center">
+            <h4 className="mb-sm">Total Plays</h4>
+            <div className="stat-value">{plays.length}</div>
+          </div>
+          <div className="card text-center">
+            <h4 className="mb-sm">Pending Top-ups</h4>
+            <div className="stat-value">{topupRequests.length}</div>
+          </div>
         </div>
       )}
 
@@ -314,7 +339,7 @@ const AdminDashboard = () => {
       {/* ──────────────────────────────────────────────── */}
       {activeTab === "users" && (
         <div className="card">
-          <h3>👤 Users</h3>
+          <h3 className="mb-md">Users</h3>
           <input
             className="input"
             placeholder="Search username or role..."
@@ -323,18 +348,30 @@ const AdminDashboard = () => {
             disabled={isBusy}
             style={{ marginBottom: 16, maxWidth: 400 }}
           />
-          <table className="table">
-            <thead><tr><th>Username</th><th>Role</th><th>Created</th></tr></thead>
-            <tbody>
-              {filteredUsers.map(u => (
-                <tr key={u.id || u.username}>
-                  <td>{u.username}</td>
-                  <td>{u.role}</td>
-                  <td>{u.created_at ? new Date(u.created_at).toLocaleString() : "—"}</td>
+          <div style={{ overflowX: 'auto' }}>
+            <table className="table table-mobile">
+              <thead>
+                <tr>
+                  <th>Username</th>
+                  <th>Role</th>
+                  <th>Created</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {filteredUsers.map(u => (
+                  <tr key={u.id || u.username}>
+                    <td data-label="Username">{u.username}</td>
+                    <td data-label="Role">
+                      <span className={`badge badge-${u.role === 'admin' ? 'reward' : u.role === 'stall' ? 'payment' : 'topup'}`}>
+                        {u.role}
+                      </span>
+                    </td>
+                    <td data-label="Created">{u.created_at ? new Date(u.created_at).toLocaleString() : "Not available"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
@@ -343,30 +380,52 @@ const AdminDashboard = () => {
       {/* ──────────────────────────────────────────────── */}
       {activeTab === "wallets" && (
         <div className="card">
-          <h3>💳 Wallets</h3>
-          <table className="table">
-            <thead><tr><th>User</th><th>Role</th><th>Balance</th><th>Action</th></tr></thead>
-            <tbody>
-              {users.map(u => (
-                <tr key={u.id || u.username}>
-                  <td>{u.username}</td>
-                  <td>{u.role}</td>
-                  <td>{u.balance != null ? `${u.balance} pts` : "—"}</td>
-                  <td>
-                    {u.wallet_id && (
-                      <button
-                        className="btn btn-danger btn-sm"
-                        onClick={() => handleFreezeWallet(u.wallet_id)}
-                        disabled={isBusy}
-                      >
-                        Freeze
-                      </button>
-                    )}
-                  </td>
+          <h3 className="mb-md">Wallets</h3>
+          <div style={{ overflowX: 'auto' }}>
+            <table className="table table-mobile">
+              <thead>
+                <tr>
+                  <th>User</th>
+                  <th>Role</th>
+                  <th>Balance</th>
+                  <th>Action</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {users.map(u => (
+                  <tr key={u.id || u.username}>
+                    <td data-label="User">{u.username}</td>
+                    <td data-label="Role">
+                      <span className={`badge badge-${u.role === 'admin' ? 'reward' : u.role === 'stall' ? 'payment' : 'topup'}`}>
+                        {u.role}
+                      </span>
+                    </td>
+                    <td data-label="Balance">
+                      <span className="balance" style={{ fontSize: '16px', margin: 0 }}>
+                        {u.balance != null ? `${u.balance} pts` : "No wallet"}
+                      </span>
+                      {!u.is_active && (
+                        <span className="badge badge-danger" style={{ marginLeft: '8px', fontSize: '10px' }}>
+                          FROZEN
+                        </span>
+                      )}
+                    </td>
+                    <td data-label="Action">
+                      {u.wallet_id && (
+                        <button
+                          className="btn btn-danger btn-sm"
+                          onClick={() => handleFreezeWallet(u.wallet_id)}
+                          disabled={isBusy}
+                        >
+                          Freeze
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
@@ -375,19 +434,54 @@ const AdminDashboard = () => {
       {/* ──────────────────────────────────────────────── */}
       {activeTab === "plays" && (
         <div className="card">
-          <h3>🎮 Plays</h3>
-          <table className="table">
-            <thead><tr><th>Visitor Wallet</th><th>Score</th><th>Date</th></tr></thead>
-            <tbody>
-              {plays.map(p => (
-                <tr key={p.id}>
-                  <td>{p.visitor_wallet || "—"}</td>
-                  <td>{p.score ?? "Pending"}</td>
-                  <td>{new Date(p.created_at).toLocaleString()}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <h3>Plays</h3>
+          {plays.length === 0 ? (
+            <div className="text-center p-lg" style={{ color: '#6b7280' }}>
+              <p>No plays recorded yet</p>
+              <p style={{ fontSize: '14px' }}>Games will appear here once visitors start playing</p>
+            </div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table className="table table-mobile">
+                <thead>
+                  <tr>
+                    <th>Visitor</th>
+                    <th>Stall</th>
+                    <th>Score</th>
+                    <th>Points</th>
+                    <th>Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {plays.map(p => (
+                    <tr key={p.id}>
+                      <td data-label="Visitor">
+                        <div>
+                          <strong>{p.visitor_username || "Unknown User"}</strong>
+                          <br />
+                          <small style={{ color: '#6b7280' }}>
+                            {p.visitor_wallet_short || "No ID"}
+                          </small>
+                        </div>
+                      </td>
+                      <td data-label="Stall">{p.stall_username || "Unknown Stall"}</td>
+                      <td data-label="Score">
+                        <span className="stat-value" style={{ fontSize: '16px' }}>
+                          {p.score ?? "Pending"}
+                        </span>
+                      </td>
+                      <td data-label="Points">
+                        <span className="balance" style={{ fontSize: '14px', margin: 0 }}>
+                          {p.points_amount || 0} pts
+                        </span>
+                      </td>
+                      <td data-label="Date">{new Date(p.created_at).toLocaleString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
@@ -396,23 +490,48 @@ const AdminDashboard = () => {
       {/* ──────────────────────────────────────────────── */}
       {activeTab === "topups" && (
         <div className="card">
-          <h3>💰 Pending Top-ups</h3>
+          <h3 className="mb-md">Pending Top-ups</h3>
           {topupRequests.length === 0 ? (
-            <p>No pending requests</p>
+            <p style={{ textAlign: 'center', color: '#6b7280', padding: '20px' }}>
+              No pending topup requests
+            </p>
           ) : (
-            topupRequests.map(r => (
-              <div key={r.id} style={{ margin: "12px 0", padding: "10px", border: "1px solid #ddd", borderRadius: 6 }}>
-                <strong>{r.username || "?"}</strong> — {r.amount} pts
-                <button
-                  className="btn btn-success btn-sm"
-                  onClick={() => handleApproveTopup(r.id)}
-                  disabled={isBusy}
-                  style={{ marginLeft: 16 }}
-                >
-                  Approve
-                </button>
-              </div>
-            ))
+            <div style={{ overflowX: 'auto' }}>
+              <table className="table table-mobile">
+                <thead>
+                  <tr>
+                    <th>User</th>
+                    <th>Amount</th>
+                    <th>Date</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {topupRequests.map(r => (
+                    <tr key={r.id}>
+                      <td data-label="User">{r.username || "Unknown"}</td>
+                      <td data-label="Amount">
+                        <span className="balance" style={{ fontSize: '14px', margin: 0 }}>
+                          {r.amount} pts
+                        </span>
+                      </td>
+                      <td data-label="Date">
+                        {new Date(r.created_at).toLocaleString()}
+                      </td>
+                      <td data-label="Action">
+                        <button
+                          className="btn btn-success btn-sm"
+                          onClick={() => handleApproveTopup(r.id)}
+                          disabled={isBusy}
+                        >
+                          Approve
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       )}
@@ -422,7 +541,7 @@ const AdminDashboard = () => {
       {/* ──────────────────────────────────────────────── */}
       {activeTab === "leaderboard" && (
         <div className="card">
-          <h3>🏆 Leaderboard</h3>
+          <h3>Leaderboard</h3>
           <table className="table">
             <thead><tr><th>Rank</th><th>User</th><th>Total Score</th><th>Plays</th></tr></thead>
             <tbody>
@@ -443,10 +562,50 @@ const AdminDashboard = () => {
       {/* ATTENDANCE – with camera scanner */}
       {/* ──────────────────────────────────────────────── */}
       {activeTab === "attendance" && (
-        <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 24 }}>
+        <div className="grid grid-2">
+          {/* QR Camera + fallback paste */}
+          <div className="card">
+            <h3 className="mb-md">QR Attendance (Live Camera)</h3>
+
+            {qrScanResult && (
+              <div className="success mb-md">
+                <strong>Last scan:</strong> {qrScanResult}
+              </div>
+            )}
+
+            <div className="scanner-container mb-md">
+              <div id="qr-reader" style={{ width: "100%", maxWidth: 420, margin: "0 auto" }}></div>
+            </div>
+
+            <p className="text-center mb-md" style={{ fontSize: 13, color: "#666" }}>
+              Position QR code in frame.<br />
+              Supported: <code>{"{user_id:..., reg_no:...}"}</code> or <code>user_id:reg-no</code>
+            </p>
+
+            {/* Manual paste fallback */}
+            <div className="mt-md">
+              <p style={{ fontSize: 13, color: "#666", marginBottom: 8 }}>Or paste content:</p>
+              <textarea
+                className="input"
+                rows={3}
+                placeholder='{"user_id":"abc123","reg_no":"REG2025-001"}  or  abc123:REG2025-001'
+                value={qrInput}
+                onChange={e => setQrInput(e.target.value)}
+                disabled={isBusy}
+              />
+              <button
+                className="btn btn-success btn-full mt-sm"
+                onClick={handleQRSubmit}
+                disabled={isBusy || !qrInput.trim()}
+              >
+                Process Pasted Text
+              </button>
+            </div>
+          </div>
+
           {/* Manual */}
           <div className="card">
-            <h3>📝 Manual Attendance</h3>
+            <h3 className="mb-md">Manual Attendance</h3>
             <form onSubmit={handleAttendanceSubmit}>
               <input
                 className="input"
@@ -464,49 +623,10 @@ const AdminDashboard = () => {
                 disabled={isBusy}
                 required
               />
-              <button className="btn" type="submit" disabled={isBusy}>
+              <button className="btn btn-full" type="submit" disabled={isBusy}>
                 {actionLoading ? "Marking..." : "Mark Attendance"}
               </button>
             </form>
-          </div>
-
-          {/* QR Camera + fallback paste */}
-          <div className="card">
-            <h3>📷 QR Attendance (Live Camera)</h3>
-
-            {qrScanResult && (
-              <div style={{ padding: 12, background: "#e6ffe6", borderRadius: 6, marginBottom: 16 }}>
-                <strong>Last scan:</strong> {qrScanResult}
-              </div>
-            )}
-
-            <div id="qr-reader" style={{ width: "100%", maxWidth: 420, margin: "0 auto 16px" }}></div>
-
-            <p style={{ fontSize: 13, color: "#666", marginBottom: 16 }}>
-              Position QR code in frame.<br />
-              Supported: <code>{"{user_id:..., reg_no:...}"}</code> or <code>user_id:reg-no</code>
-            </p>
-
-            {/* Manual paste fallback */}
-            <div style={{ marginTop: 24 }}>
-              <p style={{ fontSize: 13, color: "#666", marginBottom: 8 }}>Or paste content:</p>
-              <textarea
-                className="input"
-                rows={3}
-                placeholder='{"user_id":"abc123","reg_no":"REG2025-001"}  or  abc123:REG2025-001'
-                value={qrInput}
-                onChange={e => setQrInput(e.target.value)}
-                disabled={isBusy}
-              />
-              <button
-                className="btn btn-success"
-                onClick={handleQRSubmit}
-                disabled={isBusy || !qrInput.trim()}
-                style={{ marginTop: 12 }}
-              >
-                Process Pasted Text
-              </button>
-            </div>
           </div>
         </div>
       )}
@@ -515,9 +635,9 @@ const AdminDashboard = () => {
       {/* CREATE */}
       {/* ──────────────────────────────────────────────── */}
       {activeTab === "create" && (
-        <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 24 }}>
+        <div className="grid grid-auto">
           <div className="card">
-            <h3>Create User</h3>
+            <h3 className="mb-md">Create User</h3>
             <form onSubmit={handleCreateUser}>
               <input className="input" placeholder="Username" value={newUser.username} onChange={e => setNewUser({...newUser, username: e.target.value})} disabled={isBusy} required />
               <input className="input" type="password" placeholder="Password" value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} disabled={isBusy} required />
@@ -527,38 +647,56 @@ const AdminDashboard = () => {
                 <option value="admin">Admin</option>
                 <option value="stall">Stall</option>
               </select>
-              <button className="btn" type="submit" disabled={isBusy}>
+              <button className="btn btn-full" type="submit" disabled={isBusy}>
                 {actionLoading ? "Creating..." : "Create User"}
               </button>
             </form>
           </div>
 
           <div className="card">
-            <h3>Create Stall</h3>
+            <h3 className="mb-md">Create Stall</h3>
             <form onSubmit={handleCreateStall}>
               <input className="input" placeholder="Username" value={newStall.username} onChange={e => setNewStall({...newStall, username: e.target.value})} disabled={isBusy} required />
               <input className="input" type="password" placeholder="Password" value={newStall.password} onChange={e => setNewStall({...newStall, password: e.target.value})} disabled={isBusy} required />
               <input className="input" type="number" placeholder="Price per play" value={newStall.price} onChange={e => setNewStall({...newStall, price: Number(e.target.value)||10})} disabled={isBusy} min="1" />
-              <button className="btn" type="submit" disabled={isBusy}>
+              <button className="btn btn-full" type="submit" disabled={isBusy}>
                 {actionLoading ? "Creating..." : "Create Stall"}
               </button>
             </form>
           </div>
 
           <div className="card">
-            <h3>📤 Bulk User Upload (CSV)</h3>
-            <input type="file" accept=".csv" onChange={handleCSVUpload} disabled={isBusy} />
-            {csvFileName && <p style={{margin: "8px 0"}}>Selected: {csvFileName}</p>}
+            <h3 className="mb-md">Bulk User Upload (CSV)</h3>
+            <input type="file" accept=".csv" onChange={handleCSVUpload} disabled={isBusy} className="input" />
+            {csvFileName && <p className="mt-sm mb-sm">Selected: {csvFileName}</p>}
             {csvUsers.length > 0 && (
-              <div style={{marginTop: 16}}>
-                <p>{csvUsers.length} valid rows</p>
-                <button className="btn btn-success" onClick={handleBulkUpload} disabled={isBusy}>
+              <div className="mt-md">
+                <p className="mb-sm">{csvUsers.length} valid rows</p>
+                <button className="btn btn-success btn-full" onClick={handleBulkUpload} disabled={isBusy}>
                   Upload {csvUsers.length} Users
                 </button>
               </div>
             )}
           </div>
+
+          <div className="card">
+            <h3 className="mb-md">Admin Top-up</h3>
+            <form onSubmit={handleTopup}>
+              <input className="input" placeholder="Username" value={topupData.username} onChange={e => setTopupData({...topupData, username: e.target.value})} disabled={isBusy} required />
+              <input className="input" type="number" placeholder="Amount" value={topupData.amount} onChange={e => setTopupData({...topupData, amount: Number(e.target.value)||50})} disabled={isBusy} min="1" />
+              <button className="btn btn-full" type="submit" disabled={isBusy}>
+                {actionLoading ? "Processing..." : "Top-up Wallet"}
+              </button>
+            </form>
+          </div>
         </div>
+      )}
+
+      {/* ──────────────────────────────────────────────── */}
+      {/* QR DEBUG */}
+      {/* ──────────────────────────────────────────────── */}
+      {activeTab === "qr-debug" && (
+        <QRDebugger />
       )}
     </div>
   );

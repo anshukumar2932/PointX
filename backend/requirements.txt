@@ -1,0 +1,14 @@
+# PointX Backend Dependencies
+
+flask
+flask-cors
+flask-smorest
+marshmallow
+supabase
+postgrest
+python-dotenv
+bcrypt
+PyJWT
+qrcode[pil]
+pillow
+gunicorn
