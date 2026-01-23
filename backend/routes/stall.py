@@ -6,7 +6,9 @@ Stall routes:
 - view plays
 """
 
-from flask import Blueprint, request, jsonify
+from flask import  request, jsonify
+from flask_smorest import Blueprint
+
 from supabase_client import supabase
 from auth import require_auth, generate_token
 

@@ -4,7 +4,9 @@ Visitor routes:
 - view stalls
 """
 
-from flask import Blueprint, jsonify,request
+from flask import  jsonify,request
+from flask_smorest import Blueprint
+
 from supabase_client import supabase
 from auth import require_auth, generate_token
 from PIL import Image

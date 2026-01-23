@@ -1,296 +1,365 @@
-import React, { useState, useEffect } from 'react';
-import axios from 'axios';
-import QRGenerator from './QRGenerator';
+import React, { useState, useEffect, useCallback } from "react";
+import Papa from "papaparse";
+import { Html5QrcodeScanner } from "html5-qrcode";
+
+import {
+  createUser,
+  createStall,
+  bulkUsers,
+  adminTopup,
+  freezeWallet,
+  getAllUsers,
+  getPlays,
+  getPendingTopups,
+  approveTopup,
+  getLeaderboard,
+  markAttendance,
+} from "../api/admin";
 
 const AdminDashboard = () => {
-  const [activeTab, setActiveTab] = useState('overview');
-  const [wallets, setWallets] = useState([]);
-  const [transactions, setTransactions] = useState([]);
-  const [plays, setPlays] = useState([]);
-  const [stalls, setStalls] = useState([]);
+  const [activeTab, setActiveTab] = useState("overview");
   const [loading, setLoading] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
 
-  // Form states
+  // Data
+  const [users, setUsers] = useState([]);
+  const [plays, setPlays] = useState([]);
+  const [topupRequests, setTopupRequests] = useState([]);
+  const [leaderboard, setLeaderboard] = useState([]);
+
+  // Filters
+  const [userSearch, setUserSearch] = useState("");
+
+  // Forms
   const [newUser, setNewUser] = useState({
-    username: '', password: '', name: '', role: 'visitor'
+    username: "",
+    password: "",
+    name: "",
+    role: "visitor",
   });
+
   const [newStall, setNewStall] = useState({
-    stall_name: '', price_per_play: 10, reward_multiplier: 5.0,
-    stall_username: '', stall_password: ''
+    username: "",
+    password: "",
+    price: 10,
   });
+
   const [topupData, setTopupData] = useState({
-    target_wallet: '', amount: 100
+    username: "",
+    adminname: "admin",
+    amount: 50,
   });
 
-  useEffect(() => {
-    const loadDataForTab = async () => {
-      setLoading(true);
-      try {
-        if (activeTab === 'overview' || activeTab === 'wallets') {
-          const walletsRes = await axios.get('/api/admin/wallets');
-          setWallets(walletsRes.data);
-        }
-        if (activeTab === 'overview' || activeTab === 'transactions') {
-          const txRes = await axios.get('/api/admin/transactions');
-          setTransactions(txRes.data);
-        }
-        if (activeTab === 'overview' || activeTab === 'plays') {
-          const playsRes = await axios.get('/api/admin/plays');
-          setPlays(playsRes.data);
-        }
-        if (activeTab === 'stalls') {
-          const stallsRes = await axios.get('/api/stalls');
-          setStalls(stallsRes.data);
-        }
-      } catch (error) {
-        console.error('Error loading data:', error);
-      }
-      setLoading(false);
-    };
+  // CSV
+  const [csvUsers, setCsvUsers] = useState([]);
+  const [csvFileName, setCsvFileName] = useState("");
 
-    loadDataForTab();
-  }, [activeTab]);
+  // Attendance
+  const [attendanceData, setAttendanceData] = useState({
+    user_id: "",
+    reg_no: "",
+  });
 
-  const loadData = async () => {
+  const [qrInput, setQrInput] = useState("");
+  const [qrScanResult, setQrScanResult] = useState(null);
+
+  // ────────────────────────────────────────────────
+  // Data Loading
+  // ────────────────────────────────────────────────
+
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      if (activeTab === 'overview' || activeTab === 'wallets') {
-        const walletsRes = await axios.get('/api/admin/wallets');
-        setWallets(walletsRes.data);
+      if (["overview", "users", "wallets"].includes(activeTab)) {
+        const res = await getAllUsers();
+        setUsers(res.data || []);
       }
-      if (activeTab === 'overview' || activeTab === 'transactions') {
-        const txRes = await axios.get('/api/admin/transactions');
-        setTransactions(txRes.data);
-      }
-      if (activeTab === 'overview' || activeTab === 'plays') {
-        const playsRes = await axios.get('/api/admin/plays');
-        setPlays(playsRes.data);
-      }
-      if (activeTab === 'stalls') {
-        const stallsRes = await axios.get('/api/stalls');
-        setStalls(stallsRes.data);
-      }
-    } catch (error) {
-      console.error('Error loading data:', error);
-    }
-    setLoading(false);
-  };
 
-  const createUser = async (e) => {
-    e.preventDefault();
+      if (["overview", "plays"].includes(activeTab)) {
+        const res = await getPlays();
+        setPlays(res.data || []);
+      }
+
+      if (activeTab === "topups") {
+        const res = await getPendingTopups();
+        setTopupRequests(res.data || []);
+      }
+
+      if (activeTab === "leaderboard") {
+        const res = await getLeaderboard();
+        setLeaderboard(res.data || []);
+      }
+    } catch (err) {
+      console.error("ADMIN LOAD ERROR:", err);
+      alert("Failed to load data. Check console.");
+    } finally {
+      setLoading(false);
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  // ────────────────────────────────────────────────
+  // Action helper with loading & error handling
+  // ────────────────────────────────────────────────
+
+  const runAction = async (actionFn, successMessage) => {
+    setActionLoading(true);
     try {
-      await axios.post('/api/create-user', newUser);
-      setNewUser({ username: '', password: '', name: '', role: 'visitor' });
-      loadData();
-      alert('User created successfully!');
-    } catch (error) {
-      alert('Error creating user: ' + (error.response?.data?.error || 'Unknown error'));
+      await actionFn();
+      alert(successMessage);
+      await loadData();
+    } catch (err) {
+      console.error(err);
+      const msg =
+        err?.response?.data?.error ||
+        err?.response?.data?.message ||
+        err.message ||
+        "Operation failed";
+      alert(`Error: ${msg}`);
+    } finally {
+      setActionLoading(false);
     }
   };
 
-  const createStall = async (e) => {
-    e.preventDefault();
-    try {
-      await axios.post('/api/create-stall', newStall);
-      setNewStall({
-        stall_name: '', price_per_play: 10, reward_multiplier: 5.0,
-        stall_username: '', stall_password: ''
-      });
-      loadData();
-      alert('Stall created successfully!');
-    } catch (error) {
-      alert('Error creating stall: ' + (error.response?.data?.error || 'Unknown error'));
-    }
-  };
+  // ────────────────────────────────────────────────
+  // QR Scanner (camera) – only when attendance tab is active
+  // ────────────────────────────────────────────────
 
-  const topupWallet = async (e) => {
-    e.preventDefault();
-    try {
-      await axios.post('/api/topup', topupData);
-      setTopupData({ target_wallet: '', amount: 100 });
-      loadData();
-      alert('Wallet topped up successfully!');
-    } catch (error) {
-      alert('Error topping up: ' + (error.response?.data?.error || 'Unknown error'));
-    }
-  };
+  useEffect(() => {
+    let scanner = null;
 
-  const freezeWallet = async (walletId) => {
-    if (window.confirm('Are you sure you want to freeze this wallet?')) {
-      try {
-        await axios.post(`/api/admin/freeze/${walletId}`);
-        loadData();
-        alert('Wallet frozen successfully!');
-      } catch (error) {
-        alert('Error freezing wallet: ' + (error.response?.data?.error || 'Unknown error'));
+    if (activeTab === "attendance") {
+      scanner = new Html5QrcodeScanner(
+        "qr-reader",
+        {
+          fps: 10,
+          qrbox: { width: 280, height: 280 },
+          aspectRatio: 1.0,
+          disableFlip: false,
+          rememberLastUsedCamera: true,
+          showZoom: true,
+        },
+        false // verbose = false
+      );
+
+      scanner.render(
+        (decodedText) => {
+          try {
+            // Case 1: JSON format
+            let parsed;
+            try {
+              parsed = JSON.parse(decodedText.trim());
+            } catch {
+              // Case 2: "user_id:reg-no" pattern
+              const [user_id, reg_no] = decodedText.split(":").map(s => s.trim());
+              if (user_id && reg_no) {
+                parsed = { user_id, reg_no };
+              }
+            }
+
+            if (!parsed || !parsed.user_id || !parsed.reg_no) {
+              alert("Invalid QR format.\nExpected: JSON or user_id:reg-no");
+              return;
+            }
+
+            setQrScanResult(decodedText);
+
+            runAction(
+              () => markAttendance(parsed),
+              "Attendance marked successfully (camera scan)"
+            );
+
+            // Optional: pause scanning for a few seconds after success
+            scanner.pause();
+            setTimeout(() => scanner.resume(), 5000);
+
+          } catch (err) {
+            console.error("QR parse/attendance error:", err);
+          }
+        },
+        (err) => {
+          // Ignore most scan errors (normal behavior)
+          if (err?.startsWith?.("No MultiFormat Readers")) return;
+          console.debug("Scan debug:", err);
+        }
+      );
+    }
+
+    return () => {
+      if (scanner) {
+        scanner
+          .clear()
+          .catch((err) => console.warn("Scanner clear failed:", err));
       }
+    };
+  }, [activeTab, runAction]);
+
+  // ────────────────────────────────────────────────
+  // Other handlers (create user, stall, topup, etc.)
+  // ────────────────────────────────────────────────
+
+  const handleCreateUser = (e) => {
+    e.preventDefault();
+    runAction(() => createUser(newUser), "User created");
+    setNewUser({ username: "", password: "", name: "", role: "visitor" });
+  };
+
+  const handleCreateStall = (e) => {
+    e.preventDefault();
+    runAction(() => createStall(newStall), "Stall created");
+    setNewStall({ username: "", password: "", price: 10 });
+  };
+
+  const handleTopup = (e) => {
+    e.preventDefault();
+    runAction(() => adminTopup(topupData), `Top-up of ${topupData.amount} successful`);
+    setTopupData({ username: "", adminname: "admin", amount: 50 });
+  };
+
+  const handleFreezeWallet = (walletId) => {
+    if (!window.confirm("Freeze wallet?")) return;
+    runAction(() => freezeWallet(walletId), "Wallet frozen");
+  };
+
+  const handleApproveTopup = (id) => {
+    runAction(() => approveTopup(id), "Top-up approved");
+  };
+
+  const handleCSVUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setCsvFileName(file.name);
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: (res) => {
+        const valid = res.data.filter(row => row.username && row.password);
+        setCsvUsers(valid);
+      },
+    });
+  };
+
+  const handleBulkUpload = () => {
+    if (!csvUsers.length) return alert("No valid users in CSV");
+    if (!window.confirm(`Create ${csvUsers.length} users?`)) return;
+    runAction(() => bulkUsers(csvUsers), `Created ${csvUsers.length} users`);
+    setCsvUsers([]);
+    setCsvFileName("");
+  };
+
+  const handleAttendanceSubmit = (e) => {
+    e.preventDefault();
+    if (!attendanceData.user_id || !attendanceData.reg_no) return alert("Fill both fields");
+    runAction(() => markAttendance(attendanceData), "Attendance marked");
+    setAttendanceData({ user_id: "", reg_no: "" });
+  };
+
+  const handleQRSubmit = () => {
+    try {
+      const parsed = JSON.parse(qrInput.trim());
+      if (!parsed.user_id || !parsed.reg_no) throw new Error();
+      runAction(() => markAttendance(parsed), "Attendance marked (manual paste)");
+      setQrInput("");
+    } catch {
+      alert("Invalid JSON format");
     }
   };
 
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleString();
-  };
+  const filteredUsers = users.filter(u =>
+    (u.username || "").toLowerCase().includes(userSearch.toLowerCase()) ||
+    (u.role || "").toLowerCase().includes(userSearch.toLowerCase())
+  );
 
-  const getTotalBalance = () => {
-    return wallets.reduce((sum, wallet) => sum + wallet.balance, 0);
-  };
+  const isBusy = loading || actionLoading;
+
+  // ────────────────────────────────────────────────
+  // RENDER
+  // ────────────────────────────────────────────────
 
   return (
-    <div>
+    <div style={{ padding: "20px", maxWidth: "1400px", margin: "0 auto" }}>
       <h1>👑 Admin Dashboard</h1>
-      
-      <div style={{ marginBottom: '24px' }}>
-        <button 
-          className={`btn ${activeTab === 'overview' ? '' : 'btn-secondary'}`}
-          onClick={() => setActiveTab('overview')}
-        >
-          📊 Overview
-        </button>
-        <button 
-          className={`btn ${activeTab === 'wallets' ? '' : 'btn-secondary'}`}
-          onClick={() => setActiveTab('wallets')}
-        >
-          💳 Wallets
-        </button>
-        <button 
-          className={`btn ${activeTab === 'stalls' ? '' : 'btn-secondary'}`}
-          onClick={() => setActiveTab('stalls')}
-        >
-          🎪 Stalls
-        </button>
-        <button 
-          className={`btn ${activeTab === 'transactions' ? '' : 'btn-secondary'}`}
-          onClick={() => setActiveTab('transactions')}
-        >
-          📋 Transactions
-        </button>
-        <button 
-          className={`btn ${activeTab === 'plays' ? '' : 'btn-secondary'}`}
-          onClick={() => setActiveTab('plays')}
-        >
-          🎮 Plays
-        </button>
-        <button 
-          className={`btn ${activeTab === 'create' ? '' : 'btn-secondary'}`}
-          onClick={() => setActiveTab('create')}
-        >
-          ➕ Create
-        </button>
+
+      <div style={{ margin: "20px 0", display: "flex", flexWrap: "wrap", gap: "10px" }}>
+        {["overview", "users", "wallets", "attendance", "plays", "topups", "leaderboard", "create"].map(tab => (
+          <button
+            key={tab}
+            className={`btn ${activeTab === tab ? "btn-primary" : "btn-secondary"}`}
+            onClick={() => setActiveTab(tab)}
+            disabled={isBusy}
+          >
+            {tab.toUpperCase()}
+          </button>
+        ))}
       </div>
 
-      {loading && <div className="loading">Loading...</div>}
+      {isBusy && <p style={{ color: "#666" }}>Processing...</p>}
 
-      {activeTab === 'overview' && (
-        <div className="grid">
-          <div className="card">
-            <h3>💰 System Stats</h3>
-            <div className="game-stats">
-              <div className="stat">
-                <div className="stat-value">{wallets.length}</div>
-                <div className="stat-label">Total Wallets</div>
-              </div>
-              <div className="stat">
-                <div className="stat-value">{getTotalBalance()}</div>
-                <div className="stat-label">Total Points</div>
-              </div>
-              <div className="stat">
-                <div className="stat-value">{transactions.length}</div>
-                <div className="stat-label">Transactions</div>
-              </div>
-              <div className="stat">
-                <div className="stat-value">{plays.length}</div>
-                <div className="stat-label">Games Played</div>
-              </div>
-            </div>
-          </div>
-
-          <div className="card">
-            <h3>🔥 Recent Activity</h3>
-            {transactions.slice(0, 5).map(tx => (
-              <div key={tx.id} style={{ 
-                padding: '8px', 
-                borderBottom: '1px solid #e5e7eb',
-                display: 'flex',
-                justifyContent: 'space-between'
-              }}>
-                <span className={`badge badge-${tx.type}`}>{tx.type}</span>
-                <span>{tx.points_amount} pts</span>
-                <span style={{ fontSize: '12px', color: '#6b7280' }}>
-                  {formatDate(tx.created_at)}
-                </span>
-              </div>
-            ))}
-          </div>
+      {/* ──────────────────────────────────────────────── */}
+      {/* OVERVIEW */}
+      {/* ──────────────────────────────────────────────── */}
+      {activeTab === "overview" && (
+        <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "20px" }}>
+          <div className="card stat-card"><h4>Total Users</h4><p className="stat-number">{users.length}</p></div>
+          <div className="card stat-card"><h4>Total Plays</h4><p className="stat-number">{plays.length}</p></div>
+          <div className="card stat-card"><h4>Pending Top-ups</h4><p className="stat-number">{topupRequests.length}</p></div>
         </div>
       )}
 
-      {activeTab === 'wallets' && (
+      {/* ──────────────────────────────────────────────── */}
+      {/* USERS */}
+      {/* ──────────────────────────────────────────────── */}
+      {activeTab === "users" && (
         <div className="card">
-          <h3>💳 Wallet Management</h3>
-          
-          <div style={{ marginBottom: '24px' }}>
-            <h4>💰 Top Up Wallet</h4>
-            <form onSubmit={topupWallet} style={{ display: 'flex', gap: '12px', alignItems: 'end' }}>
-              <div>
-                <label>Wallet ID:</label>
-                <input
-                  type="text"
-                  className="input"
-                  value={topupData.target_wallet}
-                  onChange={(e) => setTopupData({...topupData, target_wallet: e.target.value})}
-                  placeholder="Enter wallet ID"
-                  required
-                />
-              </div>
-              <div>
-                <label>Amount:</label>
-                <input
-                  type="number"
-                  className="input"
-                  value={topupData.amount}
-                  onChange={(e) => setTopupData({...topupData, amount: parseInt(e.target.value)})}
-                  min="1"
-                  required
-                />
-              </div>
-              <button type="submit" className="btn btn-success">💰 Top Up</button>
-            </form>
-          </div>
-
+          <h3>👤 Users</h3>
+          <input
+            className="input"
+            placeholder="Search username or role..."
+            value={userSearch}
+            onChange={e => setUserSearch(e.target.value)}
+            disabled={isBusy}
+            style={{ marginBottom: 16, maxWidth: 400 }}
+          />
           <table className="table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Balance</th>
-                <th>Status</th>
-                <th>Created</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
+            <thead><tr><th>Username</th><th>Role</th><th>Created</th></tr></thead>
             <tbody>
-              {wallets.map(wallet => (
-                <tr key={wallet.id}>
-                  <td>{wallet.user_name}</td>
-                  <td className="balance">{wallet.balance} pts</td>
+              {filteredUsers.map(u => (
+                <tr key={u.id || u.username}>
+                  <td>{u.username}</td>
+                  <td>{u.role}</td>
+                  <td>{u.created_at ? new Date(u.created_at).toLocaleString() : "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* ──────────────────────────────────────────────── */}
+      {/* WALLETS */}
+      {/* ──────────────────────────────────────────────── */}
+      {activeTab === "wallets" && (
+        <div className="card">
+          <h3>💳 Wallets</h3>
+          <table className="table">
+            <thead><tr><th>User</th><th>Role</th><th>Balance</th><th>Action</th></tr></thead>
+            <tbody>
+              {users.map(u => (
+                <tr key={u.id || u.username}>
+                  <td>{u.username}</td>
+                  <td>{u.role}</td>
+                  <td>{u.balance != null ? `${u.balance} pts` : "—"}</td>
                   <td>
-                    <span className={`badge ${wallet.is_active ? 'badge-reward' : 'badge-payment'}`}>
-                      {wallet.is_active ? 'Active' : 'Frozen'}
-                    </span>
-                  </td>
-                  <td>{formatDate(wallet.created_at)}</td>
-                  <td>
-                    <QRGenerator 
-                      type="wallet" 
-                      itemId={wallet.id} 
-                      title={`${wallet.user_name} Wallet`}
-                    />
-                    {wallet.is_active && (
-                      <button 
-                        onClick={() => freezeWallet(wallet.id)}
-                        className="btn btn-danger"
-                        style={{ padding: '4px 8px', fontSize: '12px' }}
+                    {u.wallet_id && (
+                      <button
+                        className="btn btn-danger btn-sm"
+                        onClick={() => handleFreezeWallet(u.wallet_id)}
+                        disabled={isBusy}
                       >
-                        🚫 Freeze
+                        Freeze
                       </button>
                     )}
                   </td>
@@ -301,31 +370,20 @@ const AdminDashboard = () => {
         </div>
       )}
 
-      {activeTab === 'stalls' && (
+      {/* ──────────────────────────────────────────────── */}
+      {/* PLAYS */}
+      {/* ──────────────────────────────────────────────── */}
+      {activeTab === "plays" && (
         <div className="card">
-          <h3>🎪 Stall Management</h3>
+          <h3>🎮 Plays</h3>
           <table className="table">
-            <thead>
-              <tr>
-                <th>Stall Name</th>
-                <th>Price per Play</th>
-                <th>Reward Multiplier</th>
-                <th>QR Code</th>
-              </tr>
-            </thead>
+            <thead><tr><th>Visitor Wallet</th><th>Score</th><th>Date</th></tr></thead>
             <tbody>
-              {stalls.map(stall => (
-                <tr key={stall.id}>
-                  <td>{stall.stall_name}</td>
-                  <td>{stall.price_per_play} pts</td>
-                  <td>{stall.reward_multiplier}x</td>
-                  <td>
-                    <QRGenerator 
-                      type="stall" 
-                      itemId={stall.id} 
-                      title={`${stall.stall_name} Game`}
-                    />
-                  </td>
+              {plays.map(p => (
+                <tr key={p.id}>
+                  <td>{p.visitor_wallet || "—"}</td>
+                  <td>{p.score ?? "Pending"}</td>
+                  <td>{new Date(p.created_at).toLocaleString()}</td>
                 </tr>
               ))}
             </tbody>
@@ -333,29 +391,47 @@ const AdminDashboard = () => {
         </div>
       )}
 
-      {activeTab === 'transactions' && (
+      {/* ──────────────────────────────────────────────── */}
+      {/* TOPUPS */}
+      {/* ──────────────────────────────────────────────── */}
+      {activeTab === "topups" && (
         <div className="card">
-          <h3>📋 Transaction History</h3>
+          <h3>💰 Pending Top-ups</h3>
+          {topupRequests.length === 0 ? (
+            <p>No pending requests</p>
+          ) : (
+            topupRequests.map(r => (
+              <div key={r.id} style={{ margin: "12px 0", padding: "10px", border: "1px solid #ddd", borderRadius: 6 }}>
+                <strong>{r.username || "?"}</strong> — {r.amount} pts
+                <button
+                  className="btn btn-success btn-sm"
+                  onClick={() => handleApproveTopup(r.id)}
+                  disabled={isBusy}
+                  style={{ marginLeft: 16 }}
+                >
+                  Approve
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+
+      {/* ──────────────────────────────────────────────── */}
+      {/* LEADERBOARD */}
+      {/* ──────────────────────────────────────────────── */}
+      {activeTab === "leaderboard" && (
+        <div className="card">
+          <h3>🏆 Leaderboard</h3>
           <table className="table">
-            <thead>
-              <tr>
-                <th>Type</th>
-                <th>Amount</th>
-                <th>From</th>
-                <th>To</th>
-                <th>Date</th>
-              </tr>
-            </thead>
+            <thead><tr><th>Rank</th><th>User</th><th>Total Score</th><th>Plays</th></tr></thead>
             <tbody>
-              {transactions.map(tx => (
-                <tr key={tx.id}>
-                  <td>
-                    <span className={`badge badge-${tx.type}`}>{tx.type}</span>
-                  </td>
-                  <td>{tx.points_amount} pts</td>
-                  <td>{tx.from_wallet?.slice(0, 8)}...</td>
-                  <td>{tx.to_wallet?.slice(0, 8)}...</td>
-                  <td>{formatDate(tx.created_at)}</td>
+              {leaderboard.map((l, i) => (
+                <tr key={l.user_id}>
+                  <td>#{i + 1}</td>
+                  <td>{l.username}</td>
+                  <td>{l.total_score}</td>
+                  <td>{l.total_plays}</td>
                 </tr>
               ))}
             </tbody>
@@ -363,125 +439,124 @@ const AdminDashboard = () => {
         </div>
       )}
 
-      {activeTab === 'plays' && (
-        <div className="card">
-          <h3>🎮 Game Play History</h3>
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Visitor</th>
-                <th>Stall</th>
-                <th>Price Paid</th>
-                <th>Score</th>
-                <th>Reward</th>
-                <th>Date</th>
-              </tr>
-            </thead>
-            <tbody>
-              {plays.map(play => (
-                <tr key={play.id}>
-                  <td>{play.visitor_wallet?.slice(0, 8)}...</td>
-                  <td>{play.stall_id?.slice(0, 8)}...</td>
-                  <td>{play.price_paid} pts</td>
-                  <td>{play.score || 'Pending'}</td>
-                  <td>{play.reward_given || 0} pts</td>
-                  <td>{formatDate(play.created_at)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {activeTab === 'create' && (
-        <div className="grid">
+      {/* ──────────────────────────────────────────────── */}
+      {/* ATTENDANCE – with camera scanner */}
+      {/* ──────────────────────────────────────────────── */}
+      {activeTab === "attendance" && (
+        <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 24 }}>
+          {/* Manual */}
           <div className="card">
-            <h3>👤 Create User</h3>
-            <form onSubmit={createUser}>
+            <h3>📝 Manual Attendance</h3>
+            <form onSubmit={handleAttendanceSubmit}>
               <input
-                type="text"
                 className="input"
-                placeholder="Username"
-                value={newUser.username}
-                onChange={(e) => setNewUser({...newUser, username: e.target.value})}
+                placeholder="User ID"
+                value={attendanceData.user_id}
+                onChange={e => setAttendanceData({ ...attendanceData, user_id: e.target.value })}
+                disabled={isBusy}
                 required
               />
               <input
-                type="password"
                 className="input"
-                placeholder="Password"
-                value={newUser.password}
-                onChange={(e) => setNewUser({...newUser, password: e.target.value})}
+                placeholder="Registration No"
+                value={attendanceData.reg_no}
+                onChange={e => setAttendanceData({ ...attendanceData, reg_no: e.target.value })}
+                disabled={isBusy}
                 required
               />
-              <input
-                type="text"
+              <button className="btn" type="submit" disabled={isBusy}>
+                {actionLoading ? "Marking..." : "Mark Attendance"}
+              </button>
+            </form>
+          </div>
+
+          {/* QR Camera + fallback paste */}
+          <div className="card">
+            <h3>📷 QR Attendance (Live Camera)</h3>
+
+            {qrScanResult && (
+              <div style={{ padding: 12, background: "#e6ffe6", borderRadius: 6, marginBottom: 16 }}>
+                <strong>Last scan:</strong> {qrScanResult}
+              </div>
+            )}
+
+            <div id="qr-reader" style={{ width: "100%", maxWidth: 420, margin: "0 auto 16px" }}></div>
+
+            <p style={{ fontSize: 13, color: "#666", marginBottom: 16 }}>
+              Position QR code in frame.<br />
+              Supported: <code>{"{user_id:..., reg_no:...}"}</code> or <code>user_id:reg-no</code>
+            </p>
+
+            {/* Manual paste fallback */}
+            <div style={{ marginTop: 24 }}>
+              <p style={{ fontSize: 13, color: "#666", marginBottom: 8 }}>Or paste content:</p>
+              <textarea
                 className="input"
-                placeholder="Display Name"
-                value={newUser.name}
-                onChange={(e) => setNewUser({...newUser, name: e.target.value})}
-                required
+                rows={3}
+                placeholder='{"user_id":"abc123","reg_no":"REG2025-001"}  or  abc123:REG2025-001'
+                value={qrInput}
+                onChange={e => setQrInput(e.target.value)}
+                disabled={isBusy}
               />
-              <select
-                className="input"
-                value={newUser.role}
-                onChange={(e) => setNewUser({...newUser, role: e.target.value})}
+              <button
+                className="btn btn-success"
+                onClick={handleQRSubmit}
+                disabled={isBusy || !qrInput.trim()}
+                style={{ marginTop: 12 }}
               >
+                Process Pasted Text
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ──────────────────────────────────────────────── */}
+      {/* CREATE */}
+      {/* ──────────────────────────────────────────────── */}
+      {activeTab === "create" && (
+        <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 24 }}>
+          <div className="card">
+            <h3>Create User</h3>
+            <form onSubmit={handleCreateUser}>
+              <input className="input" placeholder="Username" value={newUser.username} onChange={e => setNewUser({...newUser, username: e.target.value})} disabled={isBusy} required />
+              <input className="input" type="password" placeholder="Password" value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} disabled={isBusy} required />
+              <input className="input" placeholder="Name" value={newUser.name} onChange={e => setNewUser({...newUser, name: e.target.value})} disabled={isBusy} />
+              <select className="input" value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value})} disabled={isBusy}>
                 <option value="visitor">Visitor</option>
                 <option value="admin">Admin</option>
+                <option value="stall">Stall</option>
               </select>
-              <button type="submit" className="btn">Create User</button>
+              <button className="btn" type="submit" disabled={isBusy}>
+                {actionLoading ? "Creating..." : "Create User"}
+              </button>
             </form>
           </div>
 
           <div className="card">
-            <h3>🎪 Create Stall</h3>
-            <form onSubmit={createStall}>
-              <input
-                type="text"
-                className="input"
-                placeholder="Stall Name"
-                value={newStall.stall_name}
-                onChange={(e) => setNewStall({...newStall, stall_name: e.target.value})}
-                required
-              />
-              <input
-                type="number"
-                className="input"
-                placeholder="Price per Play"
-                value={newStall.price_per_play}
-                onChange={(e) => setNewStall({...newStall, price_per_play: parseInt(e.target.value)})}
-                min="1"
-                required
-              />
-              <input
-                type="number"
-                className="input"
-                placeholder="Reward Multiplier"
-                step="0.1"
-                value={newStall.reward_multiplier}
-                onChange={(e) => setNewStall({...newStall, reward_multiplier: parseFloat(e.target.value)})}
-                min="0"
-                required
-              />
-              <input
-                type="text"
-                className="input"
-                placeholder="Stall Username"
-                value={newStall.stall_username}
-                onChange={(e) => setNewStall({...newStall, stall_username: e.target.value})}
-                required
-              />
-              <input
-                type="password"
-                className="input"
-                placeholder="Stall Password"
-                value={newStall.stall_password}
-                onChange={(e) => setNewStall({...newStall, stall_password: e.target.value})}
-                required
-              />
-              <button type="submit" className="btn">Create Stall</button>
+            <h3>Create Stall</h3>
+            <form onSubmit={handleCreateStall}>
+              <input className="input" placeholder="Username" value={newStall.username} onChange={e => setNewStall({...newStall, username: e.target.value})} disabled={isBusy} required />
+              <input className="input" type="password" placeholder="Password" value={newStall.password} onChange={e => setNewStall({...newStall, password: e.target.value})} disabled={isBusy} required />
+              <input className="input" type="number" placeholder="Price per play" value={newStall.price} onChange={e => setNewStall({...newStall, price: Number(e.target.value)||10})} disabled={isBusy} min="1" />
+              <button className="btn" type="submit" disabled={isBusy}>
+                {actionLoading ? "Creating..." : "Create Stall"}
+              </button>
             </form>
+          </div>
+
+          <div className="card">
+            <h3>📤 Bulk User Upload (CSV)</h3>
+            <input type="file" accept=".csv" onChange={handleCSVUpload} disabled={isBusy} />
+            {csvFileName && <p style={{margin: "8px 0"}}>Selected: {csvFileName}</p>}
+            {csvUsers.length > 0 && (
+              <div style={{marginTop: 16}}>
+                <p>{csvUsers.length} valid rows</p>
+                <button className="btn btn-success" onClick={handleBulkUpload} disabled={isBusy}>
+                  Upload {csvUsers.length} Users
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

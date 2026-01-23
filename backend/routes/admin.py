@@ -12,17 +12,62 @@ Admin routes:
 - leaderboards
 """
 
-from flask import Blueprint, request, jsonify
+from flask import  request, jsonify
+from flask_smorest import Blueprint
+
 import bcrypt
 
 from supabase_client import supabase
 from auth import require_auth, generate_token
+from marshmallow import Schema, fields
 
 admin_bp = Blueprint("admin", __name__)
 
+# -------- Swagger Schemas --------
+
+class CreateUserSchema(Schema):
+    username = fields.Str(required=True, metadata={"example": "visitor1"})
+    password = fields.Str(required=True, metadata={"example": "password123"})
+    name = fields.Str(required=True, metadata={"example": "Visitor One"})
+    role = fields.Str(metadata={"example": "visitor"})
+    price = fields.Int(metadata={"example": 10})
+
+
+class CreateUserResponseSchema(Schema):
+    user_id = fields.UUID()
+    user_name = fields.Str()
+    wallet_id = fields.UUID()
+    stall_id = fields.UUID(allow_none=True)
+
+class BulkUsersSchema(Schema):
+    users = fields.List(fields.Nested(CreateUserSchema), required=True)
+
+
+
+class TopupSchema(Schema):
+    username = fields.Str(required=True, metadata={"example": "visitor1"})
+    adminname = fields.Str(required=True, metadata={"example": "admin"})
+    amount = fields.Int(required=True, metadata={"example": 50})
+
+
+class GenericSuccessSchema(Schema):
+    success = fields.Boolean(metadata={"example": True})
+
+
+class AttendanceSchema(Schema):
+    user_id = fields.UUID(required=True)
+    reg_no = fields.Str(required=True, metadata={"example": "REG123"})
+
+
+class TopupApproveSchema(Schema):
+    request_id = fields.UUID(required=True)
+
+
 @admin_bp.route("/create-user", methods=["POST"])
 @require_auth(["admin"])
-def create_visitor():
+@admin_bp.arguments(CreateUserSchema)
+@admin_bp.response(200, CreateUserResponseSchema)
+def create_visitor(data):
     """
     Docstring for create_visitor
     """
@@ -104,12 +149,16 @@ def create_stall():
 
     return jsonify({"stall_id": stall["id"]})
 
+
 @admin_bp.route("/bulk-users", methods=["POST"])
 @require_auth(["admin"])
+@admin_bp.arguments(BulkUsersSchema)
+@admin_bp.response(200)
 def bulk_users():
     """
     Docstring for bulk_users
     """
+
     inp=request.get_json()
     users=[]
     if not inp:
@@ -172,7 +221,9 @@ def user_view():
 
 @admin_bp.route("/topup", methods=["POST"])
 @require_auth(["admin"])
-def admin_topup():
+@admin_bp.arguments(TopupSchema)
+@admin_bp.response(200)
+def admin_topup(data):
     """
     Uses RPC: admin_topup
     input:
@@ -180,6 +231,7 @@ def admin_topup():
     -adminname
     -amount
     """
+
     data = request.json
 
     res=supabase.table("wallets")\
@@ -231,15 +283,19 @@ def plays_view():
     """
     Docstring for plays_view
     """
-    res=supabase.table("transactions")\
-    .eq("type","play")\
-    .excute()
+    res = supabase.table("transactions") \
+        .select("*") \
+        .eq("type", "play") \
+        .execute()
 
-    return jsonify(res.data)
+    return jsonify(res.data), 200
+
 
 @admin_bp.route("/attendance", methods=["POST"])
 @require_auth(["admin"])
-def attendance():
+@admin_bp.arguments(AttendanceSchema)
+@admin_bp.response(201)
+def attendance(data):
     """
     input:
     - user_id
@@ -274,10 +330,9 @@ def attendance():
     }), 201
 
     
-    
-
 @admin_bp.route("/freeze/<wallet_id>", methods=["POST"])
 @require_auth(["admin"])
+@admin_bp.response(200, GenericSuccessSchema)
 def freeze_wallet(wallet_id):
     supabase.table("wallets") \
         .update({"is_active": False}) \
@@ -299,7 +354,10 @@ def pending_topups():
 
 @admin_bp.route("/topup-approve", methods=["POST"])
 @require_auth(["admin"])
-def approve_topup():
+@admin_bp.arguments(TopupApproveSchema)
+@admin_bp.response(200)
+def approve_topup(data):
+
     data = request.json
 
     result = supabase.rpc("approve_topup_request", {
@@ -308,4 +366,28 @@ def approve_topup():
     }).execute()
 
     return jsonify(result.data), 200
+
+@admin_bp.route("/wallets", methods=["GET"])
+@require_auth(["admin"])
+def wallets():
+    res = supabase.table("wallets") \
+        .select("id, user_id, username, balance, is_active, created_at") \
+        .execute()
+    return jsonify(res.data)
+
+
+@admin_bp.route("/leaderboard", methods=["GET"])
+@require_auth(["visitor", "admin"])
+def leaderboard():
+    res = supabase.rpc("visitor_leaderboard").execute()
+    return jsonify(res.data), 200
+
+@admin_bp.route("/transactions", methods=["GET"])
+@require_auth(["admin"])
+def transactions():
+    res = supabase.table("transactions") \
+        .select("*") \
+        .order("created_at", desc=True) \
+        .execute()
+    return jsonify(res.data)
 
