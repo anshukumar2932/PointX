@@ -1,6 +1,6 @@
 """
 PointX - QR-based Point Management System
-Main Flask application entry point
+Main Flask application entry point for Render deployment
 """
 
 import os
@@ -226,6 +226,9 @@ def register_middleware(app):
         return response
 
 
+# Create the application instance for Render auto-detection
+app = create_app()
+
 if __name__ == "__main__":
     # Get port from environment variable
     port = int(os.getenv('PORT', 5000))
@@ -235,7 +238,6 @@ if __name__ == "__main__":
     print(f"Environment: {os.getenv('FLASK_ENV', 'development')}")
     print(f"Debug mode: {debug}")
     
-    app = create_app()
     app.run(
         host="0.0.0.0", 
         port=port, 
