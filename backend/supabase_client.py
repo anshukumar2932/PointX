@@ -1,12 +1,17 @@
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 from supabase import create_client
 
-# Explicitly load .env from backend directory
-load_dotenv()
+# Force-load .env from THIS directory
+BASE_DIR = Path(__file__).resolve().parent
+ENV_PATH = BASE_DIR / ".env"
+
+load_dotenv(dotenv_path=ENV_PATH, override=True)
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
+
 
 if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
     raise RuntimeError("Supabase environment variables not set")

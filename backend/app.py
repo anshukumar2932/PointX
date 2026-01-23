@@ -7,6 +7,7 @@ from flask_cors import CORS
 
 from routes.admin import admin_bp
 from routes.stall import stall_bp
+from routes.auth_log import auth_bp
 from routes.visitor import visitor_bp
 
 def create_app():
@@ -14,8 +15,9 @@ def create_app():
     CORS(app)
 
     app.register_blueprint(admin_bp, url_prefix="/api/admin")
-    app.register_blueprint(stall_bp, url_prefix="/api/stall")
-    app.register_blueprint(visitor_bp, url_prefix="/api")
+    app.register_blueprint(stall_bp, url_prefix="/api/stall")    
+    app.register_blueprint(visitor_bp, url_prefix="/api/visitor") 
+    app.register_blueprint(auth_bp, url_prefix="/api/auth")
 
     @app.route("/")
     def root():
