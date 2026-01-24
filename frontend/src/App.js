@@ -14,7 +14,7 @@ function AppContent() {
     return (
       <div className="container">
         <div className="loading">
-          <h2>🎮 Loading Arcade Wallet...</h2>
+          <h2>Loading PointX...</h2>
         </div>
       </div>
     );
