@@ -29,7 +29,11 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (username, password) => {
     try {
-      const response = await api.post('/auth/login', { username, password });
+      const response = await api.post('/auth/login', {
+        username: username.trim(),
+        password: password
+      });
+
       const { token, role } = response.data;
       
       // Set the token first
