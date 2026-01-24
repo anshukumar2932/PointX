@@ -14,6 +14,7 @@
 import React, { useState, useEffect } from "react";
 import api from "../api/axios";
 import QRScanner from "./QRScanner";
+import QRDebugger from "./QRDebugger";
 
 const StallDashboard = () => {
   const [activeTab, setActiveTab] = useState("scanner");
@@ -110,8 +111,13 @@ const StallDashboard = () => {
 
     try {
       // First, get visitor's current balance
+      console.log(`Fetching balance for wallet ID: ${walletId}`);
+      console.log(`API URL: ${api.defaults.baseURL}/stall/visitor-balance/${walletId}`);
+      
       const balanceRes = await api.get(`/stall/visitor-balance/${walletId}`);
       const visitorData = balanceRes.data;
+      
+      console.log("Visitor balance response:", visitorData);
       
       if (!visitorData.is_active) {
         setMessage("Error: Visitor wallet is frozen");
@@ -140,8 +146,31 @@ const StallDashboard = () => {
       setMessage(`Game started for ${qrData.username || visitorData.username} (Balance: ${visitorData.balance} pts)`);
     } catch (err) {
       console.error("Play error:", err);
-      const errorMsg = err.response?.data?.error || err.response?.data?.message || "Failed to start game";
+      console.error("Error response:", err.response);
+      console.error("Error config:", err.config);
+      
+      let errorMsg = "Failed to fetch visitor balance";
+      
+      if (err.response) {
+        // Server responded with error status
+        errorMsg = err.response.data?.error || err.response.data?.message || `Server error: ${err.response.status}`;
+        console.error(`Server error ${err.response.status}:`, err.response.data);
+      } else if (err.request) {
+        // Request was made but no response received
+        errorMsg = "Network error - cannot reach server";
+        console.error("Network error:", err.request);
+      } else {
+        // Something else happened
+        errorMsg = err.message || "Unknown error occurred";
+        console.error("Unknown error:", err.message);
+      }
+      
       setMessage(`Error: ${errorMsg}`);
+      
+      // Additional debugging info
+      console.log("Current API base URL:", api.defaults.baseURL);
+      console.log("Auth token present:", !!localStorage.getItem('token'));
+      console.log("User data:", localStorage.getItem('user'));
     }
 
     setLoading(false);
@@ -194,7 +223,7 @@ const StallDashboard = () => {
       <h1 className="text-center mb-lg">Stall Dashboard</h1>
 
       <div className="tab-nav">
-        {["scanner", "score", "history", "wallet"].map((tab) => (
+        {["scanner", "score", "history", "wallet", "debug"].map((tab) => (
           <button
             key={tab}
             className={`tab-button ${activeTab === tab ? "active" : ""}`}
@@ -359,6 +388,13 @@ const StallDashboard = () => {
           <div className="mt-md" style={{ fontSize: '12px', color: '#6b7280' }}>
             <p>Auto-refreshes every 30 seconds</p>
           </div>
+        </div>
+      )}
+
+      {/* -------- DEBUG -------- */}
+      {activeTab === "debug" && (
+        <div className="card">
+          <QRDebugger />
         </div>
       )}
     </div>
