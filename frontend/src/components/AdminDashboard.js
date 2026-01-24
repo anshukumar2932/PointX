@@ -23,6 +23,10 @@ const AdminDashboard = () => {
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
 
+  // State for image preview modal
+  const [previewImage, setPreviewImage] = useState(null);
+  const [imageLoading, setImageLoading] = useState(false);
+
   // Data
   const [users, setUsers] = useState([]);
   const [plays, setPlays] = useState([]);
@@ -243,6 +247,95 @@ const AdminDashboard = () => {
   const handleApproveTopup = (id) => {
     runAction(() => approveTopup(id), "Top-up approved");
   };
+
+  const handlePreviewImage = async (imagePath) => {
+    if (!imagePath) {
+      alert("No image available for this request");
+      return;
+    }
+
+    setImageLoading(true);
+    try {
+      console.log("Requesting image for path:", imagePath);
+      
+      // Get the signed URL or base64 data for the image from private bucket
+      const response = await api.get(`/admin/topup-image/${encodeURIComponent(imagePath)}`);
+      console.log("Image response:", response.data);
+      
+      if (!response.data.url) {
+        throw new Error("No URL returned from server");
+      }
+      
+      setPreviewImage({
+        url: response.data.url,
+        path: imagePath,
+        method: response.data.method || 'signed_url',
+        expires_in: response.data.expires_in,
+        size: response.data.size
+      });
+    } catch (error) {
+      console.error("Failed to load image:", error);
+      console.error("Error response:", error.response);
+      
+      let errorMessage = "Failed to load image from private bucket. ";
+      if (error.response?.data?.error) {
+        errorMessage += error.response.data.error;
+      } else if (error.message) {
+        errorMessage += error.message;
+      } else {
+        errorMessage += "Please try again.";
+      }
+      
+      // Show error in modal instead of alert for better UX
+      setPreviewImage({
+        url: null,
+        path: imagePath,
+        error: errorMessage
+      });
+    } finally {
+      setImageLoading(false);
+    }
+  };
+
+  const closeImagePreview = () => {
+    setPreviewImage(null);
+  };
+
+  const debugStorage = async () => {
+    try {
+      const response = await api.get('/admin/storage-debug');
+      console.log("Storage debug info:", response.data);
+      alert(`Storage Debug Info:\n${JSON.stringify(response.data, null, 2)}`);
+    } catch (error) {
+      console.error("Storage debug failed:", error);
+      alert(`Storage debug failed: ${error.response?.data?.error || error.message}`);
+    }
+  };
+
+  const testImageUpload = async () => {
+    try {
+      const response = await api.post('/admin/test-image-upload');
+      console.log("Test upload result:", response.data);
+      alert(`Test Upload Result (Private Bucket):\n${JSON.stringify(response.data, null, 2)}`);
+    } catch (error) {
+      console.error("Test upload failed:", error);
+      alert(`Test upload failed: ${error.response?.data?.error || error.message}`);
+    }
+  };
+
+  // Handle keyboard events for image modal
+  useEffect(() => {
+    const handleKeyPress = (event) => {
+      if (event.key === 'Escape' && previewImage) {
+        closeImagePreview();
+      }
+    };
+
+    if (previewImage) {
+      window.addEventListener('keydown', handleKeyPress);
+      return () => window.removeEventListener('keydown', handleKeyPress);
+    }
+  }, [previewImage]);
 
   const handleCSVUpload = (e) => {
     const file = e.target.files[0];
@@ -491,6 +584,29 @@ const AdminDashboard = () => {
       {activeTab === "topups" && (
         <div className="card">
           <h3 className="mb-md">Pending Top-ups</h3>
+          
+          <div style={{ marginBottom: '15px', display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={debugStorage}
+              disabled={isBusy}
+              style={{ fontSize: '12px' }}
+            >
+              🔍 Debug Storage
+            </button>
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={testImageUpload}
+              disabled={isBusy}
+              style={{ fontSize: '12px' }}
+            >
+              🧪 Test Upload
+            </button>
+            <span style={{ fontSize: '12px', color: '#6b7280' }}>
+              🔒 Private bucket - Use these tools to diagnose access issues
+            </span>
+          </div>
+          
           {topupRequests.length === 0 ? (
             <p style={{ textAlign: 'center', color: '#6b7280', padding: '20px' }}>
               No pending topup requests
@@ -503,6 +619,7 @@ const AdminDashboard = () => {
                     <th>User</th>
                     <th>Amount</th>
                     <th>Date</th>
+                    <th>Payment Proof</th>
                     <th>Action</th>
                   </tr>
                 </thead>
@@ -517,6 +634,20 @@ const AdminDashboard = () => {
                       </td>
                       <td data-label="Date">
                         {new Date(r.created_at).toLocaleString()}
+                      </td>
+                      <td data-label="Payment Proof">
+                        {r.image_path ? (
+                          <button
+                            className="btn btn-secondary btn-sm"
+                            onClick={() => handlePreviewImage(r.image_path)}
+                            disabled={imageLoading}
+                            style={{ fontSize: '12px' }}
+                          >
+                            {imageLoading ? 'Loading...' : 'View Image'}
+                          </button>
+                        ) : (
+                          <span style={{ color: '#6b7280', fontSize: '12px' }}>No image</span>
+                        )}
                       </td>
                       <td data-label="Action">
                         <button
@@ -697,6 +828,165 @@ const AdminDashboard = () => {
       {/* ──────────────────────────────────────────────── */}
       {activeTab === "qr-debug" && (
         <QRDebugger />
+      )}
+
+      {/* ──────────────────────────────────────────────── */}
+      {/* IMAGE PREVIEW MODAL */}
+      {/* ──────────────────────────────────────────────── */}
+      {previewImage && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: '20px'
+        }}
+        onClick={closeImagePreview}
+        >
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '8px',
+            padding: '20px',
+            maxWidth: '90vw',
+            maxHeight: '90vh',
+            overflow: 'auto',
+            position: 'relative'
+          }}
+          onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={closeImagePreview}
+              style={{
+                position: 'absolute',
+                top: '10px',
+                right: '10px',
+                background: '#dc2626',
+                color: 'white',
+                border: 'none',
+                borderRadius: '50%',
+                width: '30px',
+                height: '30px',
+                cursor: 'pointer',
+                fontSize: '16px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+            >
+              ×
+            </button>
+            
+            <h3 style={{ marginBottom: '15px', paddingRight: '40px' }}>Payment Proof</h3>
+            
+            <div style={{ textAlign: 'center' }}>
+              {previewImage.error ? (
+                <div style={{ 
+                  padding: '40px', 
+                  color: '#dc2626',
+                  backgroundColor: '#fef2f2',
+                  borderRadius: '8px',
+                  border: '1px solid #fecaca'
+                }}>
+                  <h4 style={{ marginBottom: '10px' }}>❌ Failed to Load Image</h4>
+                  <p style={{ marginBottom: '15px' }}>{previewImage.error}</p>
+                  <div style={{ 
+                    fontSize: '12px', 
+                    color: '#6b7280',
+                    backgroundColor: '#f9fafb',
+                    padding: '10px',
+                    borderRadius: '4px',
+                    textAlign: 'left'
+                  }}>
+                    <strong>Debug Info:</strong><br/>
+                    Path: {previewImage.path}<br/>
+                    Bucket: payments (private)<br/>
+                    Possible causes:<br/>
+                    • File was not uploaded successfully<br/>
+                    • Storage bucket permissions issue<br/>
+                    • RLS (Row Level Security) blocking access<br/>
+                    • File was deleted or moved<br/>
+                    • Signed URL generation failed<br/>
+                    <br/>
+                    <strong>Try:</strong><br/>
+                    • Use the "🔍 Debug Storage" button above<br/>
+                    • Check Supabase dashboard for RLS policies<br/>
+                    • Verify file exists in storage bucket
+                  </div>
+                </div>
+              ) : previewImage.url ? (
+                <img
+                  src={previewImage.url}
+                  alt="Payment proof"
+                  style={{
+                    maxWidth: '100%',
+                    maxHeight: '70vh',
+                    objectFit: 'contain',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '4px'
+                  }}
+                  onError={(e) => {
+                    console.error("Image failed to load from URL:", previewImage.url);
+                    setPreviewImage(prev => ({
+                      ...prev,
+                      error: "Image failed to load from storage URL. The file may not exist or be corrupted."
+                    }));
+                  }}
+                />
+              ) : (
+                <div style={{ padding: '40px', color: '#6b7280' }}>
+                  <p>Loading image...</p>
+                </div>
+              )}
+            </div>
+            
+            <div style={{ 
+              marginTop: '15px', 
+              padding: '10px', 
+              backgroundColor: '#f9fafb', 
+              borderRadius: '4px',
+              fontSize: '12px',
+              color: '#6b7280'
+            }}>
+              <strong>Image Path:</strong> {previewImage.path}<br/>
+              <strong>Bucket Type:</strong> Private (Secure Access)<br/>
+              {previewImage.method && (
+                <>
+                  <strong>Access Method:</strong> {
+                    previewImage.method === 'signed_url' ? 'Signed URL (Temporary)' :
+                    previewImage.method === 'download_base64' ? 'Direct Download (Base64)' :
+                    previewImage.method
+                  }<br/>
+                </>
+              )}
+              {previewImage.expires_in && (
+                <>
+                  <strong>URL Expires In:</strong> {Math.floor(previewImage.expires_in / 60)} minutes<br/>
+                </>
+              )}
+              {previewImage.size && (
+                <>
+                  <strong>File Size:</strong> {(previewImage.size / 1024).toFixed(1)} KB<br/>
+                </>
+              )}
+              {previewImage.url && !previewImage.url.startsWith('data:') && (
+                <>
+                  <strong>Temporary URL:</strong> <a href={previewImage.url} target="_blank" rel="noopener noreferrer" style={{ color: '#3b82f6' }}>
+                    Open in new tab
+                  </a><br/>
+                </>
+              )}
+              <small style={{ color: '#9ca3af', marginTop: '5px', display: 'block' }}>
+                🔒 This image is stored in a private bucket for security
+              </small>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

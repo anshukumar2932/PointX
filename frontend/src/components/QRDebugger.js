@@ -33,8 +33,18 @@ const QRDebugger = () => {
         setTestResult(prev => prev + `⚠️ Visitor balance: ${balanceError.response?.status || 'Network Error'} - ${balanceError.response?.data?.error || balanceError.message}\n\n`);
       }
       
-      // Test 4: Show current API configuration
-      setTestResult(prev => prev + '4. Current API Configuration:\n');
+      // Test 4: Test topup dependencies (if user is visitor)
+      setTestResult(prev => prev + '4. Testing topup dependencies...\n');
+      try {
+        const topupTestRes = await api.get('/visitor/topup-test');
+        setTestResult(prev => prev + `✅ Topup test: ${topupTestRes.status}\n`);
+        setTestResult(prev => prev + `${JSON.stringify(topupTestRes.data, null, 2)}\n\n`);
+      } catch (topupError) {
+        setTestResult(prev => prev + `⚠️ Topup test: ${topupError.response?.status || 'Network Error'} - ${topupError.response?.data?.error || topupError.message}\n\n`);
+      }
+
+      // Test 5: Show current API configuration
+      setTestResult(prev => prev + '5. Current API Configuration:\n');
       setTestResult(prev => prev + `Base URL: ${api.defaults.baseURL}\n`);
       setTestResult(prev => prev + `Auth Token: ${localStorage.getItem('token') ? 'Present' : 'Missing'}\n`);
       setTestResult(prev => prev + `User Data: ${localStorage.getItem('user') || 'Missing'}\n\n`);
@@ -90,6 +100,7 @@ const QRDebugger = () => {
           <li><strong>403 Forbidden:</strong> Check if your user has the correct role (stall/admin)</li>
           <li><strong>404 Not Found:</strong> The visitor wallet ID might not exist in the database</li>
           <li><strong>CORS Error:</strong> Backend needs to allow your frontend domain</li>
+          <li><strong>500 Topup Error:</strong> Check storage bucket "payments" exists, image processing works, and topup_requests table is accessible</li>
         </ul>
       </div>
     </div>

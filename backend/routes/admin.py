@@ -408,6 +408,264 @@ def pending_topups():
 
     return jsonify(formatted_data)
 
+
+@admin_bp.route("/topup-image/<path:image_path>", methods=["GET"])
+@require_auth(["admin"])
+def get_topup_image(image_path):
+    """Get signed URL for topup request image from private bucket"""
+    try:
+        print(f"DEBUG: Requesting image path: {image_path}")
+        
+        # First, check if the file exists in storage
+        try:
+            file_list = supabase.storage.from_("payments").list(path="topups/")
+            print(f"DEBUG: Files in topups folder: {[f.get('name', f) for f in file_list]}")
+            
+            # Extract filename from path
+            filename = image_path.split('/')[-1]
+            file_exists = any(
+                (f.get('name') == filename if isinstance(f, dict) else str(f) == filename)
+                for f in file_list
+            )
+            print(f"DEBUG: Looking for file: {filename}, exists: {file_exists}")
+            
+            if not file_exists:
+                return jsonify({"error": f"File not found in storage: {filename}"}), 404
+            
+        except Exception as list_error:
+            print(f"DEBUG: Error listing files: {list_error}")
+            # Continue anyway, maybe the file exists but listing failed
+        
+        # For private buckets, create a signed URL (temporary access)
+        # This creates a URL that expires in 1 hour (3600 seconds)
+        try:
+            signed_url_response = supabase.storage.from_("payments").create_signed_url(
+                image_path, 
+                expires_in=3600  # 1 hour expiration
+            )
+            print(f"DEBUG: Signed URL response type: {type(signed_url_response)}")
+            print(f"DEBUG: Signed URL response: {signed_url_response}")
+            
+            # Handle different response formats
+            signed_url = None
+            
+            if hasattr(signed_url_response, 'error') and signed_url_response.error:
+                print(f"DEBUG: Supabase error: {signed_url_response.error}")
+                return jsonify({"error": f"Failed to create signed URL: {signed_url_response.error}"}), 500
+            
+            # Extract signed URL from response
+            if isinstance(signed_url_response, dict):
+                if 'data' in signed_url_response and signed_url_response['data']:
+                    signed_url = signed_url_response['data'].get('signedUrl')
+                elif 'signedUrl' in signed_url_response:
+                    signed_url = signed_url_response['signedUrl']
+            elif hasattr(signed_url_response, 'data') and signed_url_response.data:
+                if hasattr(signed_url_response.data, 'signedUrl'):
+                    signed_url = signed_url_response.data.signedUrl
+                elif isinstance(signed_url_response.data, dict):
+                    signed_url = signed_url_response.data.get('signedUrl')
+            
+            if not signed_url:
+                print(f"DEBUG: Could not extract signed URL from response: {signed_url_response}")
+                return jsonify({"error": "Failed to extract signed URL from response"}), 500
+            
+            print(f"DEBUG: Final signed URL: {signed_url}")
+            
+            # Validate the URL format
+            if not signed_url.startswith(('http://', 'https://')):
+                return jsonify({"error": f"Invalid signed URL format: {signed_url}"}), 500
+            
+            return jsonify({
+                "url": signed_url,
+                "expires_in": 3600,
+                "method": "signed_url"
+            }), 200
+            
+        except Exception as signed_url_error:
+            print(f"DEBUG: Signed URL creation failed: {signed_url_error}")
+            
+            # Fallback: Try to download the file and return it as base64
+            try:
+                print("DEBUG: Attempting fallback download method")
+                download_response = supabase.storage.from_("payments").download(image_path)
+                
+                if hasattr(download_response, 'error') and download_response.error:
+                    return jsonify({"error": f"Download failed: {download_response.error}"}), 500
+                
+                # Get the blob data
+                blob_data = None
+                if hasattr(download_response, 'data') and download_response.data:
+                    blob_data = download_response.data
+                elif isinstance(download_response, dict) and 'data' in download_response:
+                    blob_data = download_response['data']
+                
+                if not blob_data:
+                    return jsonify({"error": "No data received from download"}), 500
+                
+                # Convert blob to base64 for frontend display
+                import base64
+                if hasattr(blob_data, 'read'):
+                    # If it's a file-like object
+                    blob_bytes = blob_data.read()
+                else:
+                    # If it's already bytes
+                    blob_bytes = blob_data
+                
+                base64_data = base64.b64encode(blob_bytes).decode('utf-8')
+                
+                # Determine MIME type based on file extension
+                file_ext = image_path.lower().split('.')[-1]
+                mime_type = {
+                    'jpg': 'image/jpeg',
+                    'jpeg': 'image/jpeg',
+                    'png': 'image/png',
+                    'gif': 'image/gif',
+                    'webp': 'image/webp'
+                }.get(file_ext, 'image/jpeg')
+                
+                data_url = f"data:{mime_type};base64,{base64_data}"
+                
+                return jsonify({
+                    "url": data_url,
+                    "method": "download_base64",
+                    "size": len(blob_bytes)
+                }), 200
+                
+            except Exception as download_error:
+                print(f"DEBUG: Download fallback also failed: {download_error}")
+                return jsonify({"error": f"Both signed URL and download methods failed. Signed URL error: {signed_url_error}. Download error: {download_error}"}), 500
+        
+    except Exception as e:
+        print(f"DEBUG: Exception in get_topup_image: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": f"Failed to get image: {str(e)}"}), 500
+
+
+@admin_bp.route("/storage-debug", methods=["GET"])
+@require_auth(["admin"])
+def debug_storage():
+    """Debug storage bucket and files"""
+    try:
+        debug_info = {
+            "supabase_config": {},
+            "bucket_info": {},
+            "topups_folder": {},
+            "sample_urls": {}
+        }
+        
+        # Show Supabase configuration
+        debug_info["supabase_config"] = {
+            "supabase_url": supabase.url,
+            "expected_storage_pattern": f"{supabase.url}/storage/v1/object/public/payments/[file-path]"
+        }
+        
+        # Check if payments bucket exists
+        try:
+            buckets = supabase.storage.list_buckets()
+            bucket_names = [b.name if hasattr(b, 'name') else str(b) for b in buckets]
+            debug_info["bucket_info"] = {
+                "payments_exists": "payments" in bucket_names,
+                "all_buckets": bucket_names
+            }
+        except Exception as e:
+            debug_info["bucket_info"] = {"error": str(e)}
+        
+        # List files in topups folder
+        try:
+            files = supabase.storage.from_("payments").list(path="topups/")
+            debug_info["topups_folder"] = {
+                "file_count": len(files),
+                "files": [f.get('name', str(f)) for f in files[:10]]  # First 10 files
+            }
+        except Exception as e:
+            debug_info["topups_folder"] = {"error": str(e)}
+        
+        # Test URL generation for first file
+        try:
+            if debug_info["topups_folder"].get("files"):
+                first_file = debug_info["topups_folder"]["files"][0]
+                test_path = f"topups/{first_file}"
+                
+                # Test signed URL creation for private bucket
+                try:
+                    signed_url_response = supabase.storage.from_("payments").create_signed_url(test_path, 60)
+                    debug_info["sample_urls"]["signed_url_test"] = {
+                        "test_path": test_path,
+                        "response_type": str(type(signed_url_response)),
+                        "response": str(signed_url_response)
+                    }
+                except Exception as signed_error:
+                    debug_info["sample_urls"]["signed_url_error"] = str(signed_error)
+                
+                # Test download method for private bucket
+                try:
+                    download_response = supabase.storage.from_("payments").download(test_path)
+                    debug_info["sample_urls"]["download_test"] = {
+                        "response_type": str(type(download_response)),
+                        "has_data": hasattr(download_response, 'data') and download_response.data is not None
+                    }
+                except Exception as download_error:
+                    debug_info["sample_urls"]["download_error"] = str(download_error)
+                
+        except Exception as e:
+            debug_info["sample_urls"] = {"error": str(e)}
+        
+        return jsonify(debug_info), 200
+        
+    except Exception as e:
+        return jsonify({"error": f"Debug failed: {str(e)}"}), 500
+
+
+@admin_bp.route("/test-image-upload", methods=["POST"])
+@require_auth(["admin"])
+def test_image_upload():
+    """Test endpoint to upload a simple image for testing private bucket access"""
+    try:
+        # Create a simple test image
+        from PIL import Image
+        import io
+        
+        # Create a simple 100x100 red square
+        img = Image.new('RGB', (100, 100), color='red')
+        img_bytes = io.BytesIO()
+        img.save(img_bytes, format='JPEG')
+        img_bytes.seek(0)
+        
+        # Upload to storage (private bucket)
+        test_path = "topups/test-image.jpg"
+        upload_result = supabase.storage.from_("payments").upload(
+            test_path,
+            img_bytes.getvalue(),
+            {"content-type": "image/jpeg", "upsert": "true"}
+        )
+        
+        print(f"DEBUG: Upload result: {upload_result}")
+        
+        # Test signed URL creation
+        signed_url_response = supabase.storage.from_("payments").create_signed_url(
+            test_path, 
+            expires_in=300  # 5 minutes
+        )
+        
+        # Test download method
+        download_response = supabase.storage.from_("payments").download(test_path)
+        
+        return jsonify({
+            "upload_result": str(upload_result),
+            "signed_url_response": str(signed_url_response),
+            "download_response_type": str(type(download_response)),
+            "download_has_data": hasattr(download_response, 'data') and download_response.data is not None,
+            "test_path": test_path,
+            "bucket_type": "private"
+        }), 200
+        
+    except Exception as e:
+        print(f"DEBUG: Test upload failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": f"Test upload failed: {str(e)}"}), 500
+
 @admin_bp.route("/topup-approve", methods=["POST"])
 @require_auth(["admin"])
 @admin_bp.arguments(TopupApproveSchema)

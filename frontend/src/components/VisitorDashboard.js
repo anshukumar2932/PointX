@@ -100,6 +100,13 @@ const VisitorDashboard = () => {
       formData.append('image', topupImage);
       formData.append('amount', topupAmount);
 
+      console.log("Submitting topup request:", {
+        amount: topupAmount,
+        fileName: topupImage.name,
+        fileSize: topupImage.size,
+        fileType: topupImage.type
+      });
+
       await api.post("/visitor/topup-request", formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
@@ -118,7 +125,39 @@ const VisitorDashboard = () => {
       setTimeout(() => setMessage(""), 5000);
       
     } catch (err) {
-      const errorMsg = err.response?.data?.error || "Failed to submit topup request";
+      console.error("Topup request error:", err);
+      console.error("Error response:", err.response);
+      console.error("Error config:", err.config);
+      
+      let errorMsg = "Failed to submit topup request";
+      
+      if (err.response) {
+        // Server responded with error status
+        errorMsg = err.response.data?.error || err.response.data?.message || `Server error: ${err.response.status}`;
+        console.error(`Server error ${err.response.status}:`, err.response.data);
+        
+        // Log additional debugging info for 500 errors
+        if (err.response.status === 500) {
+          console.error("500 Error Details:");
+          console.error("- Request URL:", err.config?.url);
+          console.error("- Request method:", err.config?.method);
+          console.error("- Request headers:", err.config?.headers);
+          console.error("- File info:", {
+            name: topupImage?.name,
+            size: topupImage?.size,
+            type: topupImage?.type
+          });
+        }
+      } else if (err.request) {
+        // Request was made but no response received
+        errorMsg = "Network error - cannot reach server";
+        console.error("Network error:", err.request);
+      } else {
+        // Something else happened
+        errorMsg = err.message || "Unknown error occurred";
+        console.error("Unknown error:", err.message);
+      }
+      
       setMessage(`Error: ${errorMsg}`);
     } finally {
       setTopupLoading(false);
@@ -170,7 +209,7 @@ const VisitorDashboard = () => {
       <h1 className="text-center mb-lg">Visitor Dashboard</h1>
 
       <div className="tab-nav">
-        {["wallet", "topup", "history", "leaderboard"].map(tab => (
+        {["wallet", "attendance", "topup", "history", "leaderboard"].map(tab => (
           <button
             key={tab}
             className={`tab-button ${activeTab === tab ? "active" : ""}`}
@@ -201,9 +240,9 @@ const VisitorDashboard = () => {
           </p>
 
           <div className="qr-container">
-            {me && me.user_id ? (
+            {me && me.user_id && wallet && wallet.wallet_id ? (
               <QRGenerator
-                userId={me.user_id}
+                walletId={wallet.wallet_id}
                 username={me.username}
                 type="visitor"
                 title={`${me.username} (Visitor)`}
@@ -211,6 +250,50 @@ const VisitorDashboard = () => {
             ) : (
               <div className="error">
                 <h4>Unable to generate QR code</h4>
+                <p>Missing wallet ID in session data</p>
+                <div className="mt-sm">
+                  <button 
+                    className="btn btn-sm btn-primary mr-sm" 
+                    onClick={loadWallet}
+                  >
+                    Retry
+                  </button>
+                  <button 
+                    className="btn btn-sm btn-secondary" 
+                    onClick={() => window.location.reload()}
+                  >
+                    Refresh Page
+                  </button>
+                </div>
+                <small className="mt-sm" style={{ display: 'block', color: '#666' }}>
+                  Debug info: {wallet ? `Wallet ID: ${wallet.wallet_id}` : 'No wallet data'}
+                </small>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ================= ATTENDANCE ================= */}
+      {activeTab === "attendance" && (
+        <div className="card text-center">
+          <h3 className="mb-md">Attendance QR</h3>
+
+          <p className="mb-md" style={{ color: "#6b7280" }}>
+            Show this QR to admin for attendance marking
+          </p>
+
+          <div className="qr-container">
+            {me && me.user_id ? (
+              <QRGenerator
+                userId={me.user_id}
+                username={me.username}
+                type="attendance"
+                title={`${me.username} (Attendance)`}
+              />
+            ) : (
+              <div className="error">
+                <h4>Unable to generate attendance QR</h4>
                 <p>Missing user ID in session data</p>
                 <div className="mt-sm">
                   <button 
@@ -227,11 +310,20 @@ const VisitorDashboard = () => {
                     Refresh Page
                   </button>
                 </div>
-                <small className="mt-sm" style={{ display: 'block', color: '#666' }}>
-                  Debug info: {me ? `Username: ${me.username}, Role: ${me.role}` : 'No user data'}
-                </small>
               </div>
             )}
+          </div>
+
+          <div className="mt-md p-sm" style={{ 
+            background: '#f0f9ff', 
+            borderRadius: '6px', 
+            fontSize: '12px',
+            border: '1px solid rgba(59, 130, 246, 0.2)'
+          }}>
+            <p><strong>Attendance Instructions:</strong></p>
+            <p>• Present this QR code to the admin</p>
+            <p>• Admin will scan to mark your attendance</p>
+            <p>• Registration number: <strong>{me.username}</strong></p>
           </div>
         </div>
       )}
