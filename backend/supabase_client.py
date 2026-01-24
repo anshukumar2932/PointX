@@ -9,6 +9,10 @@ from dotenv import load_dotenv
 from supabase import create_client
 import logging
 
+
+print("SUPABASE KEY LOADED:", os.getenv("SUPABASE_KEY")[:15])
+
+
 # Setup logging
 logger = logging.getLogger(__name__)
 
