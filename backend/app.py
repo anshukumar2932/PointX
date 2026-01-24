@@ -18,27 +18,16 @@ from routes.visitor import visitor_bp
 
 
 def create_app(config_name=None):
-    """Application factory pattern"""
     app = Flask(__name__)
-    
-    # Load configuration
-    config_name = config_name or os.getenv('FLASK_ENV', 'development')
-    
-    # For now, use basic configuration until we fix the config import
-    app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key')
-    app.config['DEBUG'] = os.getenv('FLASK_ENV') == 'development'
-    
-    # Setup logging
+
+    # Setup logging first
     setup_logging(app)
     
-    # Setup CORS
+    # Configure CORS with better logging
     setup_cors(app)
     
-    # Setup API documentation
+    # Setup API docs
     setup_api_docs(app)
-    
-    # Register blueprints
-    register_blueprints(app)
     
     # Register error handlers
     register_error_handlers(app)
@@ -46,7 +35,11 @@ def create_app(config_name=None):
     # Register middleware
     register_middleware(app)
     
+    # Register routes (this will create the Api instance)
+    register_blueprints(app)
+    
     return app
+
 
 
 def setup_logging(app):
@@ -78,15 +71,66 @@ def setup_logging(app):
 
 
 def setup_cors(app):
+    """Configure CORS settings with detailed logging"""
+    # For local development, be more permissive
+    allowed_origins = ['http://localhost:3000', 'http://127.0.0.1:3000']
+    
+    # Add production origins if specified
+    env_origins = os.getenv('ALLOWED_ORIGINS', '')
+    if env_origins:
+        env_origins_list = [origin.strip() for origin in env_origins.split(',') if origin.strip()]
+        allowed_origins.extend(env_origins_list)
+    
+    app.logger.info(f'CORS allowed origins: {allowed_origins}')
+    
+    # Use more permissive CORS for local development
+    CORS(
+        app,
+        resources={
+            r"/api/*": {
+                "origins": allowed_origins,
+                "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+                "allow_headers": ["Content-Type", "Authorization", "Accept", "Origin", "X-Requested-With", "X-Visitor-Wallet-ID"],
+                "supports_credentials": True,
+                "max_age": 86400
+            }
+        }
+    )
+    
+    # Add CORS logging middleware
+    @app.before_request
+    def log_cors_info():
+        if request.method == 'OPTIONS':
+            app.logger.info(f'CORS preflight: {request.method} {request.url}')
+            app.logger.info(f'Origin: {request.headers.get("Origin", "None")}')
+            app.logger.info(f'Access-Control-Request-Method: {request.headers.get("Access-Control-Request-Method", "None")}')
+            app.logger.info(f'Access-Control-Request-Headers: {request.headers.get("Access-Control-Request-Headers", "None")}')
+        else:
+            app.logger.info(f'Request: {request.method} {request.url}')
+            app.logger.info(f'Origin: {request.headers.get("Origin", "None")}')
+            app.logger.info(f'Content-Type: {request.headers.get("Content-Type", "None")}')
+
+
+def setup_cors(app):
     """Configure CORS settings"""
     allowed_origins = os.getenv('ALLOWED_ORIGINS', 'http://localhost:3000').split(',')
+    
+    # Clean up origins (remove whitespace)
+    allowed_origins = [origin.strip() for origin in allowed_origins if origin.strip()]
+    
+    app.logger.info(f'CORS allowed origins: {allowed_origins}')
+    
+    # For local development, ensure localhost:3000 is always allowed
+    if 'http://localhost:3000' not in allowed_origins:
+        allowed_origins.append('http://localhost:3000')
     
     CORS(
         app,
         resources={r"/api/*": {"origins": allowed_origins}},
         supports_credentials=True,
         allow_headers=["Content-Type", "Authorization", "X-Visitor-Wallet-ID"],
-        methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"]
+        methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+        expose_headers=["Content-Type", "Authorization"]
     )
 
 
@@ -125,6 +169,46 @@ def register_blueprints(app):
             "health_check": "/api/health",
             "timestamp": datetime.utcnow().isoformat()
         })
+
+    @app.route("/api/debug")
+    def debug():
+        return jsonify({
+            "message": "Debug endpoint working",
+            "timestamp": datetime.utcnow().isoformat(),
+            "request_info": {
+                "method": request.method,
+                "url": request.url,
+                "origin": request.headers.get('Origin'),
+                "user_agent": request.headers.get('User-Agent', '')[:100],
+                "is_secure": request.is_secure,
+                "scheme": request.scheme,
+                "host": request.host
+            }
+        })
+
+    @app.route("/api/<path:path>", methods=['OPTIONS'])
+    def handle_options(path):
+        """Handle all OPTIONS requests for CORS preflight"""
+        app.logger.info(f'Handling OPTIONS preflight for: /api/{path}')
+        app.logger.info(f'Origin: {request.headers.get("Origin")}')
+        app.logger.info(f'Access-Control-Request-Method: {request.headers.get("Access-Control-Request-Method")}')
+        app.logger.info(f'Access-Control-Request-Headers: {request.headers.get("Access-Control-Request-Headers")}')
+        
+        response = jsonify({"message": "CORS preflight OK"})
+        origin = request.headers.get('Origin')
+        
+        # Allow localhost origins
+        if origin and ('localhost' in origin or '127.0.0.1' in origin):
+            response.headers['Access-Control-Allow-Origin'] = origin
+            response.headers['Access-Control-Allow-Credentials'] = 'true'
+            response.headers['Access-Control-Allow-Headers'] = 'Content-Type, content-type, Authorization, Accept, Origin, X-Requested-With, X-Visitor-Wallet-ID'
+            response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS, PATCH'
+            response.headers['Access-Control-Max-Age'] = '86400'  # Cache preflight for 24 hours
+            app.logger.info(f'Set CORS headers for origin: {origin}')
+        else:
+            app.logger.warning(f'Rejected CORS preflight for origin: {origin}')
+            
+        return response
 
     @app.route("/api/health")
     def health():
@@ -208,17 +292,21 @@ def register_error_handlers(app):
 def register_middleware(app):
     """Register middleware functions"""
     
-    @app.before_request
-    def log_request_info():
-        if not app.debug:
-            app.logger.info(f'{request.method} {request.url} - {request.remote_addr}')
-    
     @app.after_request
     def after_request(response):
         # Add security headers
         response.headers['X-Content-Type-Options'] = 'nosniff'
         response.headers['X-Frame-Options'] = 'DENY'
         response.headers['X-XSS-Protection'] = '1; mode=block'
+        
+        # Add explicit CORS headers for debugging
+        origin = request.headers.get('Origin')
+        if origin and origin in ['http://localhost:3000', 'http://127.0.0.1:3000']:
+            response.headers['Access-Control-Allow-Origin'] = origin
+            response.headers['Access-Control-Allow-Credentials'] = 'true'
+            response.headers['Access-Control-Allow-Headers'] = 'Content-Type, content-type, Authorization, Accept, Origin, X-Requested-With, X-Visitor-Wallet-ID'
+            response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS, PATCH'
+            app.logger.info(f'Added explicit CORS headers for origin: {origin}')
         
         if not app.debug:
             app.logger.info(f'Response: {response.status_code}')
@@ -232,10 +320,11 @@ app = create_app()
 if __name__ == "__main__":
     # Get port from environment variable
     port = int(os.getenv('PORT', 5000))
-    debug = os.getenv('FLASK_ENV') == 'development'
+    # Force development mode for local testing
+    debug = True
     
     print(f"Starting PointX API on port {port}")
-    print(f"Environment: {os.getenv('FLASK_ENV', 'development')}")
+    print(f"Environment: development (forced for local testing)")
     print(f"Debug mode: {debug}")
     
     app.run(
