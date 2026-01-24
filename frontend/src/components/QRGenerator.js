@@ -41,7 +41,6 @@ const QRGenerator = ({ walletId, userId, username, type = "visitor", title }) =>
   // Guard: QR must NEVER render without wallet_id (for visitors) or user_id (for stalls/admins)
   const requiredId = walletId || userId;
   if (!requiredId) {
-    console.error("QRGenerator: walletId or userId missing");
     return <p className="error">QR not available</p>;
   }
 

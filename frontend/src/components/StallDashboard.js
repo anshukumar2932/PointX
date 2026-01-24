@@ -61,7 +61,6 @@ const StallDashboard = () => {
       const res = await api.get("/stall/wallet");
       setWallet(res.data);
     } catch (error) {
-      console.error("Failed to load wallet:", error);
       setMessage("Failed to load wallet information");
     }
   };
@@ -71,7 +70,6 @@ const StallDashboard = () => {
       const res = await api.get("/stall/history");
       setPlays(res.data || []);
     } catch (error) {
-      console.error("Failed to load history:", error);
       setMessage("Failed to load play history");
     }
   };
@@ -79,8 +77,6 @@ const StallDashboard = () => {
   /* ---------------- QR SCAN ---------------- */
 
   const handleQRScan = async (qrData) => {
-    console.log("QR Data received:", qrData);
-    
     // Validate QR data structure
     if (!qrData || typeof qrData !== 'object') {
       setMessage("Invalid QR code format");
@@ -111,13 +107,8 @@ const StallDashboard = () => {
 
     try {
       // First, get visitor's current balance
-      console.log(`Fetching balance for wallet ID: ${walletId}`);
-      console.log(`API URL: ${api.defaults.baseURL}/stall/visitor-balance/${walletId}`);
-      
       const balanceRes = await api.get(`/stall/visitor-balance/${walletId}`);
       const visitorData = balanceRes.data;
-      
-      console.log("Visitor balance response:", visitorData);
       
       if (!visitorData.is_active) {
         setMessage("Error: Visitor wallet is frozen");
@@ -145,32 +136,20 @@ const StallDashboard = () => {
 
       setMessage(`Game started for ${qrData.username || visitorData.username} (Balance: ${visitorData.balance} pts)`);
     } catch (err) {
-      console.error("Play error:", err);
-      console.error("Error response:", err.response);
-      console.error("Error config:", err.config);
-      
       let errorMsg = "Failed to fetch visitor balance";
       
       if (err.response) {
         // Server responded with error status
         errorMsg = err.response.data?.error || err.response.data?.message || `Server error: ${err.response.status}`;
-        console.error(`Server error ${err.response.status}:`, err.response.data);
       } else if (err.request) {
         // Request was made but no response received
         errorMsg = "Network error - cannot reach server";
-        console.error("Network error:", err.request);
       } else {
         // Something else happened
         errorMsg = err.message || "Unknown error occurred";
-        console.error("Unknown error:", err.message);
       }
       
       setMessage(`Error: ${errorMsg}`);
-      
-      // Additional debugging info
-      console.log("Current API base URL:", api.defaults.baseURL);
-      console.log("Auth token present:", !!localStorage.getItem('token'));
-      console.log("User data:", localStorage.getItem('user'));
     }
 
     setLoading(false);
@@ -267,7 +246,6 @@ const StallDashboard = () => {
                 isActive={true}
                 onScan={handleQRScan}
                 onError={(e) => {
-                  console.error("Scanner error:", e);
                   setMessage(`❌ Scanner Error: ${e.message}`);
                   if (e.message.includes("Camera permission")) {
                     setScanning(false);

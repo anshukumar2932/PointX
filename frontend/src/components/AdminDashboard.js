@@ -110,8 +110,7 @@ const AdminDashboard = () => {
         setLeaderboard(res.data || []);
       }
     } catch (err) {
-      console.error("ADMIN LOAD ERROR:", err);
-      alert("Failed to load data. Check console.");
+      alert("Failed to load data.");
     } finally {
       setLoading(false);
     }
@@ -132,7 +131,6 @@ const AdminDashboard = () => {
       alert(successMessage);
       await loadData();
     } catch (err) {
-      console.error(err);
       const msg =
         err?.response?.data?.error ||
         err?.response?.data?.message ||
@@ -197,13 +195,12 @@ const AdminDashboard = () => {
             setTimeout(() => scanner.resume(), 5000);
 
           } catch (err) {
-            console.error("QR parse/attendance error:", err);
+            // Ignore most scan errors (normal behavior)
           }
         },
         (err) => {
           // Ignore most scan errors (normal behavior)
           if (err?.startsWith?.("No MultiFormat Readers")) return;
-          console.debug("Scan debug:", err);
         }
       );
     }
@@ -212,7 +209,7 @@ const AdminDashboard = () => {
       if (scanner) {
         scanner
           .clear()
-          .catch((err) => console.warn("Scanner clear failed:", err));
+          .catch(() => {});
       }
     };
   }, [activeTab, runAction]);
@@ -256,11 +253,8 @@ const AdminDashboard = () => {
 
     setImageLoading(true);
     try {
-      console.log("Requesting image for path:", imagePath);
-      
       // Get the signed URL or base64 data for the image from private bucket
       const response = await api.get(`/admin/topup-image/${encodeURIComponent(imagePath)}`);
-      console.log("Image response:", response.data);
       
       if (!response.data.url) {
         throw new Error("No URL returned from server");
@@ -274,9 +268,6 @@ const AdminDashboard = () => {
         size: response.data.size
       });
     } catch (error) {
-      console.error("Failed to load image:", error);
-      console.error("Error response:", error.response);
-      
       let errorMessage = "Failed to load image from private bucket. ";
       if (error.response?.data?.error) {
         errorMessage += error.response.data.error;
@@ -304,10 +295,8 @@ const AdminDashboard = () => {
   const debugStorage = async () => {
     try {
       const response = await api.get('/admin/storage-debug');
-      console.log("Storage debug info:", response.data);
       alert(`Storage Debug Info:\n${JSON.stringify(response.data, null, 2)}`);
     } catch (error) {
-      console.error("Storage debug failed:", error);
       alert(`Storage debug failed: ${error.response?.data?.error || error.message}`);
     }
   };
@@ -315,10 +304,8 @@ const AdminDashboard = () => {
   const testImageUpload = async () => {
     try {
       const response = await api.post('/admin/test-image-upload');
-      console.log("Test upload result:", response.data);
       alert(`Test Upload Result (Private Bucket):\n${JSON.stringify(response.data, null, 2)}`);
     } catch (error) {
-      console.error("Test upload failed:", error);
       alert(`Test upload failed: ${error.response?.data?.error || error.message}`);
     }
   };
@@ -931,7 +918,6 @@ const AdminDashboard = () => {
                     borderRadius: '4px'
                   }}
                   onError={(e) => {
-                    console.error("Image failed to load from URL:", previewImage.url);
                     setPreviewImage(prev => ({
                       ...prev,
                       error: "Image failed to load from storage URL. The file may not exist or be corrupted."

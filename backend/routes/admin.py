@@ -414,12 +414,9 @@ def pending_topups():
 def get_topup_image(image_path):
     """Get signed URL for topup request image from private bucket"""
     try:
-        print(f"DEBUG: Requesting image path: {image_path}")
-        
         # First, check if the file exists in storage
         try:
             file_list = supabase.storage.from_("payments").list(path="topups/")
-            print(f"DEBUG: Files in topups folder: {[f.get('name', f) for f in file_list]}")
             
             # Extract filename from path
             filename = image_path.split('/')[-1]
@@ -427,14 +424,13 @@ def get_topup_image(image_path):
                 (f.get('name') == filename if isinstance(f, dict) else str(f) == filename)
                 for f in file_list
             )
-            print(f"DEBUG: Looking for file: {filename}, exists: {file_exists}")
             
             if not file_exists:
                 return jsonify({"error": f"File not found in storage: {filename}"}), 404
             
         except Exception as list_error:
-            print(f"DEBUG: Error listing files: {list_error}")
             # Continue anyway, maybe the file exists but listing failed
+            pass
         
         # For private buckets, create a signed URL (temporary access)
         # This creates a URL that expires in 1 hour (3600 seconds)
@@ -443,14 +439,11 @@ def get_topup_image(image_path):
                 image_path, 
                 expires_in=3600  # 1 hour expiration
             )
-            print(f"DEBUG: Signed URL response type: {type(signed_url_response)}")
-            print(f"DEBUG: Signed URL response: {signed_url_response}")
             
             # Handle different response formats
             signed_url = None
             
             if hasattr(signed_url_response, 'error') and signed_url_response.error:
-                print(f"DEBUG: Supabase error: {signed_url_response.error}")
                 return jsonify({"error": f"Failed to create signed URL: {signed_url_response.error}"}), 500
             
             # Extract signed URL from response
@@ -466,10 +459,7 @@ def get_topup_image(image_path):
                     signed_url = signed_url_response.data.get('signedUrl')
             
             if not signed_url:
-                print(f"DEBUG: Could not extract signed URL from response: {signed_url_response}")
                 return jsonify({"error": "Failed to extract signed URL from response"}), 500
-            
-            print(f"DEBUG: Final signed URL: {signed_url}")
             
             # Validate the URL format
             if not signed_url.startswith(('http://', 'https://')):
@@ -482,11 +472,8 @@ def get_topup_image(image_path):
             }), 200
             
         except Exception as signed_url_error:
-            print(f"DEBUG: Signed URL creation failed: {signed_url_error}")
-            
             # Fallback: Try to download the file and return it as base64
             try:
-                print("DEBUG: Attempting fallback download method")
                 download_response = supabase.storage.from_("payments").download(image_path)
                 
                 if hasattr(download_response, 'error') and download_response.error:
@@ -532,13 +519,9 @@ def get_topup_image(image_path):
                 }), 200
                 
             except Exception as download_error:
-                print(f"DEBUG: Download fallback also failed: {download_error}")
                 return jsonify({"error": f"Both signed URL and download methods failed. Signed URL error: {signed_url_error}. Download error: {download_error}"}), 500
         
     except Exception as e:
-        print(f"DEBUG: Exception in get_topup_image: {e}")
-        import traceback
-        traceback.print_exc()
         return jsonify({"error": f"Failed to get image: {str(e)}"}), 500
 
 
@@ -640,8 +623,6 @@ def test_image_upload():
             {"content-type": "image/jpeg", "upsert": "true"}
         )
         
-        print(f"DEBUG: Upload result: {upload_result}")
-        
         # Test signed URL creation
         signed_url_response = supabase.storage.from_("payments").create_signed_url(
             test_path, 
@@ -661,9 +642,6 @@ def test_image_upload():
         }), 200
         
     except Exception as e:
-        print(f"DEBUG: Test upload failed: {e}")
-        import traceback
-        traceback.print_exc()
         return jsonify({"error": f"Test upload failed: {str(e)}"}), 500
 
 @admin_bp.route("/topup-approve", methods=["POST"])

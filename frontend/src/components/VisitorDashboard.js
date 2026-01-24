@@ -42,14 +42,12 @@ const VisitorDashboard = () => {
     setUserLoading(true);
     try {
       const res = await api.get("/auth/me");
-      console.log("User data loaded:", res.data);
       setMe(res.data);
       setMessage(""); // Clear any previous error messages
       
       // Also update the auth context with complete user data
       await refreshUser();
     } catch (error) {
-      console.error("Failed to load user session:", error);
       setMessage("Failed to load user session. Please try logging in again.");
     } finally {
       setUserLoading(false);
@@ -70,7 +68,7 @@ const VisitorDashboard = () => {
       const res = await api.get("/visitor/history");
       setHistory(res.data || []);
     } catch {
-      console.error("Failed to load history");
+      // Silent fail for history
     }
   };
 
@@ -79,7 +77,7 @@ const VisitorDashboard = () => {
       const res = await api.get("/visitor/leaderboard");
       setLeaderboard(res.data || []);
     } catch {
-      console.error("Failed to load leaderboard");
+      // Silent fail for leaderboard
     }
   };
 
@@ -100,13 +98,6 @@ const VisitorDashboard = () => {
       formData.append('image', topupImage);
       formData.append('amount', topupAmount);
 
-      console.log("Submitting topup request:", {
-        amount: topupAmount,
-        fileName: topupImage.name,
-        fileSize: topupImage.size,
-        fileType: topupImage.type
-      });
-
       await api.post("/visitor/topup-request", formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
@@ -125,37 +116,17 @@ const VisitorDashboard = () => {
       setTimeout(() => setMessage(""), 5000);
       
     } catch (err) {
-      console.error("Topup request error:", err);
-      console.error("Error response:", err.response);
-      console.error("Error config:", err.config);
-      
       let errorMsg = "Failed to submit topup request";
       
       if (err.response) {
         // Server responded with error status
         errorMsg = err.response.data?.error || err.response.data?.message || `Server error: ${err.response.status}`;
-        console.error(`Server error ${err.response.status}:`, err.response.data);
-        
-        // Log additional debugging info for 500 errors
-        if (err.response.status === 500) {
-          console.error("500 Error Details:");
-          console.error("- Request URL:", err.config?.url);
-          console.error("- Request method:", err.config?.method);
-          console.error("- Request headers:", err.config?.headers);
-          console.error("- File info:", {
-            name: topupImage?.name,
-            size: topupImage?.size,
-            type: topupImage?.type
-          });
-        }
       } else if (err.request) {
         // Request was made but no response received
         errorMsg = "Network error - cannot reach server";
-        console.error("Network error:", err.request);
       } else {
         // Something else happened
         errorMsg = err.message || "Unknown error occurred";
-        console.error("Unknown error:", err.message);
       }
       
       setMessage(`Error: ${errorMsg}`);

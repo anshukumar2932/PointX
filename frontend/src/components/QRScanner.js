@@ -41,10 +41,8 @@ const QRScanner = ({ onScan, isActive, onError }) => {
 
     scanner.render(
       (text) => {
-        console.log("QR Code scanned:", text);
         try {
           const data = JSON.parse(text);
-          console.log("Parsed QR data:", data);
           
           // Validate the QR data structure
           if (!data || typeof data !== 'object') {
@@ -53,7 +51,6 @@ const QRScanner = ({ onScan, isActive, onError }) => {
           
           onScan(data);
         } catch (parseError) {
-          console.error("QR Parse Error:", parseError);
           onError?.({ 
             message: "Invalid QR format. Please ensure you're scanning a valid arcade wallet QR code.",
             details: parseError.message 
@@ -67,8 +64,6 @@ const QRScanner = ({ onScan, isActive, onError }) => {
             err.includes("NotFoundException")) {
           return; // These are normal scanning states, not errors
         }
-        
-        console.warn("QR Scanner Error:", err);
         
         // Only report actual errors to the user
         if (err.includes("NotAllowedError")) {

@@ -327,10 +327,6 @@ if __name__ == "__main__":
     # Force development mode for local testing
     debug = True
     
-    print(f"Starting PointX API on port {port}")
-    print(f"Environment: development (forced for local testing)")
-    print(f"Debug mode: {debug}")
-    
     app.run(
         host="0.0.0.0", 
         port=port, 
