@@ -10,7 +10,8 @@ from supabase import create_client
 import logging
 
 
-print("SUPABASE KEY LOADED:", os.getenv("SUPABASE_KEY")[:15])
+print("SUPABASE KEY LOADED:", os.getenv("SUPABASE_KEY"))
+print("SUPABASE URL LOADED:", os.getenv("SUPABASE_URL"))
 
 
 # Setup logging
