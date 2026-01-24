@@ -7,9 +7,6 @@ console.log("API Base URL:", baseURL);
 
 const api = axios.create({
   baseURL: baseURL,
-  headers: {
-    "Content-Type": "text/plain",
-  },
   // Force HTTP for local development
   timeout: 10000,
   // Disable HTTPS agent for local development
