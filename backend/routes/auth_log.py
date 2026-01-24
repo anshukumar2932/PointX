@@ -56,21 +56,22 @@ class MeResponseSchema(Schema):
 @auth_bp.arguments(LoginRequestSchema)
 @auth_bp.response(200, LoginResponseSchema)
 def login(data):
-    """
-    Login with username and password.
-    Returns JWT token on success.
-    """
-
-    # NOTE: logic unchanged, only `data` now comes from schema
     try:
+        current_app.logger.info("LOGIN ATTEMPT for user: %s", data["username"])
+
         res = supabase.table("users") \
             .select("id,username,password_hash,role") \
             .eq("username", data["username"]) \
             .execute()
-    except Exception:
+
+        current_app.logger.info("SUPABASE RESPONSE: %s", res.data)
+
+    except Exception as e:
+        current_app.logger.error("DATABASE ERROR: %s", str(e), exc_info=True)
         return jsonify({"error": "Database error"}), 500
 
     if not res.data:
+        current_app.logger.warning("INVALID USERNAME: %s", data["username"])
         return jsonify({"error": "Invalid credentials"}), 401
 
     user = res.data[0]
@@ -79,18 +80,18 @@ def login(data):
         data["password"].encode("utf-8"),
         user["password_hash"].encode("utf-8")
     ):
+        current_app.logger.warning("INVALID PASSWORD for user: %s", data["username"])
         return jsonify({"error": "Invalid credentials"}), 401
 
-    token = generate_token(
-        user["id"],
-        user["role"],
-        user["username"]
-    )
+    token = generate_token(user["id"], user["role"], user["username"])
+
+    current_app.logger.info("LOGIN SUCCESS for user: %s", data["username"])
 
     return {
         "token": token,
         "role": user["role"]
     }
+
 
 
 @auth_bp.route("/logout", methods=["POST"])
