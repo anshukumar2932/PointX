@@ -1,41 +1,369 @@
 # PointX Backend API
 
-QR-based Point Management System Backend
+Flask-based REST API server for the PointX QR-based Point Management System.
 
-## Local Development
+## 🎯 Overview
 
+The PointX backend provides a comprehensive REST API for managing users, wallets, transactions, and game operations. Built with Flask and Supabase, it supports multi-role authentication and real-time data processing.
+
+## 🚀 Features
+
+### Core Functionality
+- **🔐 JWT Authentication**: Secure token-based authentication with role-based access
+- **👥 Multi-Role System**: Admin, Stall, and Visitor roles with specific permissions
+- **💰 Wallet Management**: Real-time balance tracking and transaction processing
+- **🎮 Game Operations**: QR-based game initiation and score submission
+- **📊 Analytics**: Comprehensive reporting and leaderboard systems
+- **📱 Cross-Platform**: CORS-enabled for web and mobile clients
+
+### New Features (v1.2.0)
+- **📋 Enhanced Bulk User Creation**: CSV upload with advanced validation
+- **🔍 Duplicate Detection**: Username uniqueness checking
+- **⚡ Batch Processing**: Handle up to 100 users per operation
+- **📈 Detailed Error Reporting**: Comprehensive validation feedback
+- **🛡️ Enhanced Security**: Improved input validation and sanitization
+
+## 🏗️ Architecture
+
+```
+backend/
+├── routes/                 # API route modules
+│   ├── __init__.py        # Route registration
+│   ├── admin.py           # Admin endpoints
+│   ├── stall.py           # Stall endpoints
+│   ├── visitor.py         # Visitor endpoints
+│   └── auth_log.py        # Authentication endpoints
+├── app.py                 # Main Flask application
+├── auth.py                # Authentication middleware
+├── supabase_client.py     # Database client configuration
+├── wsgi.py                # WSGI entry point for production
+├── requirements.txt       # Python dependencies
+├── .env                   # Environment configuration
+└── logs/                  # Application logs
+    └── pointx.log
+```
+
+## 🔧 Installation & Setup
+
+### Prerequisites
+- Python 3.8 or higher
+- pip (Python package manager)
+- Supabase account and project
+
+### Local Development
+
+1. **Clone and navigate to backend**:
+   ```bash
+   cd backend
+   ```
+
+2. **Create virtual environment** (recommended):
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   ```
+
+3. **Install dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+4. **Configure environment**:
+   ```bash
+   cp .env.example .env
+   # Edit .env with your configuration
+   ```
+
+5. **Run development server**:
+   ```bash
+   python app.py
+   ```
+
+The API will be available at `http://localhost:5000`
+
+## 🌐 Production Deployment
+
+### Render Deployment (Recommended)
+
+1. **Connect Repository**: Link your GitHub repository to Render
+2. **Configure Service**:
+   - **Root Directory**: `backend`
+   - **Build Command**: `pip install -r requirements.txt`
+   - **Start Command**: `gunicorn wsgi:app`
+3. **Set Environment Variables** (see configuration section below)
+
+### Alternative Platforms
+- **Railway**: Similar setup, use `backend` as root directory
+- **Heroku**: Add `Procfile` with `web: gunicorn wsgi:app`
+- **DigitalOcean App Platform**: Configure with `backend` as source directory
+
+## ⚙️ Configuration
+
+### Environment Variables
+
+Create a `.env` file in the backend directory:
+
+```env
+# Supabase Configuration
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_KEY=your_supabase_service_role_key
+
+# Flask Configuration
+SECRET_KEY=your_super_secret_flask_key_here
+JWT_SECRET=your_jwt_signing_secret_key
+
+# CORS Configuration
+ALLOWED_ORIGINS=https://your-frontend-domain.com,https://your-mobile-app.com
+
+# Optional Configuration
+FLASK_ENV=production
+PORT=5000
+```
+
+### Required Variables
+- `SUPABASE_URL`: Your Supabase project URL
+- `SUPABASE_KEY`: Supabase service role key (not anon key)
+- `SECRET_KEY`: Flask secret key for session management
+- `JWT_SECRET`: Secret key for JWT token signing
+
+### Optional Variables
+- `ALLOWED_ORIGINS`: Comma-separated list of allowed origins for CORS
+- `FLASK_ENV`: Environment mode (development/production)
+- `PORT`: Server port (default: 5000)
+
+## 📡 API Endpoints
+
+### Authentication
+```
+POST /api/auth/login          # User login
+POST /api/auth/logout         # User logout
+```
+
+### Admin Endpoints
+```
+# User Management
+GET  /api/admin/users         # Get all users
+POST /api/admin/create-user   # Create single user
+POST /api/admin/bulk-users    # Bulk create users (NEW)
+POST /api/admin/create-stall  # Create stall user
+
+# Wallet Management
+GET  /api/admin/wallets       # Get all wallets
+POST /api/admin/topup         # Admin wallet top-up
+POST /api/admin/freeze/{id}   # Freeze wallet
+
+# Analytics & Reporting
+GET  /api/admin/plays         # Get all play transactions
+GET  /api/admin/transactions  # Get all transactions
+GET  /api/admin/leaderboard   # Get leaderboard
+
+# Attendance
+POST /api/admin/attendance    # Mark attendance
+
+# Top-up Requests
+GET  /api/admin/topup-requests     # Get pending requests
+POST /api/admin/topup-approve      # Approve request
+GET  /api/admin/topup-image/{path} # Get payment proof image
+```
+
+### Stall Endpoints
+```
+GET  /api/stall/wallet              # Get stall wallet info
+GET  /api/stall/history             # Get stall play history
+POST /api/stall/play                # Start new game
+POST /api/stall/submit-score        # Submit game score
+GET  /api/stall/visitor-balance/{id} # Get visitor balance
+```
+
+### Visitor Endpoints
+```
+GET /api/visitor/wallet       # Get visitor wallet
+GET /api/visitor/history      # Get visitor play history
+GET /api/visitor/leaderboard  # Get leaderboard
+```
+
+### Utility Endpoints
+```
+GET /api/health              # Health check
+GET /api/docs                # API documentation
+GET /api/openapi.json        # OpenAPI specification
+```
+
+## 🔒 Authentication & Authorization
+
+### JWT Token System
+- **Login**: Returns JWT token valid for 24 hours
+- **Authorization**: Include token in `Authorization: Bearer <token>` header
+- **Role-Based Access**: Endpoints protected by user roles
+
+### User Roles
+- **Admin**: Full system access, user management, analytics
+- **Stall**: Game operations, score submission, stall management
+- **Visitor**: Personal wallet, game history, leaderboard access
+
+## 📋 Enhanced Bulk User Creation
+
+### New Bulk Upload Features
+- **CSV Validation**: Comprehensive data validation before processing
+- **Duplicate Detection**: Prevents creation of users with existing usernames
+- **Batch Processing**: Handles up to 100 users per request
+- **Error Reporting**: Detailed feedback on validation failures
+- **Role-Specific Setup**: Automatic wallet and stall configuration
+
+### API Request Format
+```json
+POST /api/admin/bulk-users
+[
+  {
+    "username": "visitor1",
+    "password": "password123",
+    "role": "visitor",
+    "name": "John Doe"
+  },
+  {
+    "username": "stall1", 
+    "password": "stallpass123",
+    "role": "stall",
+    "name": "Game Stall 1",
+    "price": 15
+  }
+]
+```
+
+### Response Format
+```json
+{
+  "success": true,
+  "created_count": 2,
+  "error_count": 0,
+  "created_users": [...],
+  "errors": []
+}
+```
+
+## 🗄️ Database Schema
+
+### Key Tables (Supabase)
+- **users**: User accounts and authentication
+- **wallets**: Point balances and wallet management
+- **transactions**: All point transactions and transfers
+- **stalls**: Stall configurations and pricing
+- **attendance**: Event attendance tracking
+
+### Database Functions (RPC)
+- `admin_topup`: Secure wallet top-up operations
+- `approve_topup_request`: Process top-up approvals
+- `visitor_leaderboard`: Generate leaderboard rankings
+
+## 🔍 API Documentation
+
+### Interactive Documentation
+- **Swagger UI**: Available at `/api/docs` when server is running
+- **OpenAPI Spec**: Available at `/api/openapi.json`
+
+### Response Formats
+All API responses follow consistent JSON format:
+```json
+{
+  "data": {...},        // Success data
+  "error": "message",   // Error message (if applicable)
+  "success": true/false // Operation status
+}
+```
+
+## 🛠️ Development
+
+### Running Tests
 ```bash
-cp .env.example .env
-# Edit .env with your Supabase credentials
-pip install -r requirements.txt
+# Install test dependencies
+pip install pytest pytest-flask
+
+# Run tests
+pytest
+```
+
+### Code Quality
+```bash
+# Install development tools
+pip install black flake8 mypy
+
+# Format code
+black .
+
+# Lint code
+flake8 .
+
+# Type checking
+mypy .
+```
+
+### Logging
+- **Development**: Console output with DEBUG level
+- **Production**: File logging to `logs/pointx.log`
+- **Log Rotation**: Automatic log file rotation
+
+## 🚨 Troubleshooting
+
+### Common Issues
+
+**Database Connection Errors**
+- Verify `SUPABASE_URL` and `SUPABASE_KEY` are correct
+- Check Supabase project status and API limits
+- Ensure service role key (not anon key) is used
+
+**CORS Issues**
+- Add your frontend domain to `ALLOWED_ORIGINS`
+- Check browser console for specific CORS errors
+- Verify preflight requests are handled correctly
+
+**Authentication Failures**
+- Check JWT secret key consistency
+- Verify token expiration and refresh logic
+- Ensure proper Authorization header format
+
+**Performance Issues**
+- Monitor Supabase usage and quotas
+- Implement query optimization for large datasets
+- Consider caching for frequently accessed data
+
+### Debug Mode
+```bash
+export FLASK_ENV=development
+export FLASK_DEBUG=1
 python app.py
 ```
 
-## Render Deployment
+## 📊 Monitoring & Analytics
 
-1. In Render, select "backend" folder as root directory
-2. Set environment variables:
-   - `SUPABASE_URL` - Your Supabase project URL
-   - `SUPABASE_KEY` - Your Supabase service role key  
-   - `SECRET_KEY` - Flask secret key
-   - `JWT_SECRET` - JWT signing key
-   - `ALLOWED_ORIGINS` - Frontend domain (e.g., https://your-frontend.netlify.app)
+### Health Monitoring
+- **Health Endpoint**: `/api/health` for uptime monitoring
+- **Database Status**: Connection and query performance
+- **Error Tracking**: Comprehensive error logging
 
-## API Documentation
+### Performance Metrics
+- **Response Times**: API endpoint performance tracking
+- **Database Queries**: Query optimization and monitoring
+- **User Activity**: Authentication and usage patterns
 
-- Health: `/api/health`
-- Docs: `/docs`
-- OpenAPI: `/openapi.json`
+## 🔄 Version History
 
-## Environment Variables
+- **v1.2.0**: Enhanced bulk user creation with CSV validation
+- **v1.1.0**: Added Flutter mobile app support
+- **v1.0.0**: Initial release with core functionality
 
-Required:
-- `SUPABASE_URL`
-- `SUPABASE_KEY`
-- `SECRET_KEY`
-- `JWT_SECRET`
+## 🤝 Contributing
 
-Optional:
-- `FLASK_ENV` (default: development)
-- `PORT` (default: 5000)
-- `ALLOWED_ORIGINS` (default: http://localhost:3000)
+1. Fork the repository
+2. Create a feature branch
+3. Follow PEP 8 coding standards
+4. Add tests for new functionality
+5. Update documentation
+6. Submit a pull request
+
+## 📄 License
+
+This project is licensed under the MIT License.
+
+---
+
+**PointX Backend** - Robust, scalable API powering seamless event management.

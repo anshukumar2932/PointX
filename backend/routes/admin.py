@@ -156,55 +156,102 @@ def create_stall():
 @admin_bp.response(200)
 def bulk_users():
     """
-    Docstring for bulk_users
+    Bulk create users with enhanced validation and error handling
     """
-
-    inp=request.get_json()
-    users=[]
+    inp = request.get_json()
+    
     if not inp:
-        return jsonify({"error" : "Empty Bulk-Users" }),400
-    for data in inp:
-        hashed = bcrypt.hashpw(
-            data["password"].encode(),
-            bcrypt.gensalt()
-        ).decode()
+        return jsonify({"error": "Empty request body"}), 400
+    
+    if not isinstance(inp, list):
+        return jsonify({"error": "Request body must be an array of user objects"}), 400
+    
+    if len(inp) == 0:
+        return jsonify({"error": "No users provided"}), 400
+    
+    if len(inp) > 100:  # Limit bulk operations
+        return jsonify({"error": "Maximum 100 users allowed per bulk operation"}), 400
+    
+    created_users = []
+    errors = []
+    
+    for i, data in enumerate(inp):
+        try:
+            # Validate required fields
+            if not data.get("username") or not data.get("password") or not data.get("role"):
+                errors.append(f"User {i+1}: Missing required fields (username, password, role)")
+                continue
+            
+            # Validate role
+            if data["role"] not in ["visitor", "stall", "admin"]:
+                errors.append(f"User {i+1}: Invalid role '{data['role']}'. Must be visitor, stall, or admin")
+                continue
+            
+            # Check if username already exists
+            existing_user = supabase.table("users").select("username").eq("username", data["username"]).execute()
+            if existing_user.data:
+                errors.append(f"User {i+1}: Username '{data['username']}' already exists")
+                continue
+            
+            # Hash password
+            hashed = bcrypt.hashpw(
+                data["password"].encode(),
+                bcrypt.gensalt()
+            ).decode()
 
-        user = supabase.table("users").insert({
-            "username": data["username"],
-            "password_hash": hashed,
-            "passwd" : data["password"],
-            "role": data.get("role", "visitor")
-        }).execute().data[0]
-
-        wallet = supabase.table("wallets").insert({
-            "user_id": user["id"],
-            "user_name": data["name"],
-            "balance": 100 if user["role"] == "visitor" else (10000 if user["role"] == "admin" else 0)
-        }).execute().data[0]
-        if user["role"]=="stall":
-            stall = supabase.table("stalls").insert({        
-                "user_id": user["id"],
-                "stall_name": data["username"],
-                "wallet_id": wallet["id"],
-                "price_per_play": data["price"]
+            # Create user
+            user = supabase.table("users").insert({
+                "username": data["username"],
+                "password_hash": hashed,
+                "passwd": data["password"],
+                "role": data["role"]
             }).execute().data[0]
-            users.append({
-            "user_id": user["id"],
-            "user_name": user["username"],
-            "wallet_id": wallet["id"],
-            "user_password": user["passwd"],
-            "stall_id": stall["id"]
-            })
 
-        else:
-            users.append({
-            "user_id": user["id"],
-            "user_name": user["username"],
-            "wallet_id": wallet["id"],
-            "user_password": user["passwd"]
-            })
-        
-    return jsonify(users)
+            # Create wallet with appropriate initial balance
+            initial_balance = 100 if user["role"] == "visitor" else (10000 if user["role"] == "admin" else 0)
+            wallet = supabase.table("wallets").insert({
+                "user_id": user["id"],
+                "username": data.get("name", data["username"]),  # Use name if provided, otherwise username
+                "balance": initial_balance
+            }).execute().data[0]
+            
+            user_result = {
+                "user_id": user["id"],
+                "username": user["username"],
+                "role": user["role"],
+                "wallet_id": wallet["id"],
+                "initial_balance": initial_balance
+            }
+            
+            # Create stall if role is stall
+            if user["role"] == "stall":
+                price_per_play = data.get("price", 10)  # Default to 10 if not specified
+                stall = supabase.table("stalls").insert({        
+                    "user_id": user["id"],
+                    "stall_name": data["username"],
+                    "wallet_id": wallet["id"],
+                    "price_per_play": price_per_play
+                }).execute().data[0]
+                user_result["stall_id"] = stall["id"]
+                user_result["price_per_play"] = price_per_play
+            
+            created_users.append(user_result)
+            
+        except Exception as e:
+            errors.append(f"User {i+1} ({data.get('username', 'unknown')}): {str(e)}")
+            continue
+    
+    # Return results
+    response = {
+        "success": len(created_users) > 0,
+        "created_count": len(created_users),
+        "error_count": len(errors),
+        "created_users": created_users,
+        "errors": errors
+    }
+    
+    status_code = 200 if len(created_users) > 0 else 400
+    return jsonify(response), status_code
 
 @admin_bp.route("/users" , methods=["GET"])
 @require_auth(["admin"])

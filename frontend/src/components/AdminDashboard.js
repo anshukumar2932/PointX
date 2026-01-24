@@ -59,6 +59,9 @@ const AdminDashboard = () => {
   // CSV
   const [csvUsers, setCsvUsers] = useState([]);
   const [csvFileName, setCsvFileName] = useState("");
+  const [csvValidationErrors, setCsvValidationErrors] = useState([]);
+  const [showBulkTextArea, setShowBulkTextArea] = useState(false);
+  const [bulkTextInput, setBulkTextInput] = useState("");
 
   // Attendance
   const [attendanceData, setAttendanceData] = useState({
@@ -324,26 +327,185 @@ const AdminDashboard = () => {
     }
   }, [previewImage]);
 
+  const validateUserData = (user, rowIndex) => {
+    const errors = [];
+    
+    // Required fields
+    if (!user.username || user.username.trim() === '') {
+      errors.push(`Row ${rowIndex + 2}: Username is required`);
+    }
+    if (!user.password || user.password.trim() === '') {
+      errors.push(`Row ${rowIndex + 2}: Password is required`);
+    }
+    if (!user.role || user.role.trim() === '') {
+      errors.push(`Row ${rowIndex + 2}: Role is required`);
+    }
+    
+    // Role validation
+    const validRoles = ['visitor', 'stall', 'admin'];
+    if (user.role && !validRoles.includes(user.role.toLowerCase())) {
+      errors.push(`Row ${rowIndex + 2}: Invalid role "${user.role}". Must be: ${validRoles.join(', ')}`);
+    }
+    
+    // Username format validation
+    if (user.username && user.username.length < 3) {
+      errors.push(`Row ${rowIndex + 2}: Username must be at least 3 characters`);
+    }
+    
+    // Password validation
+    if (user.password && user.password.length < 6) {
+      errors.push(`Row ${rowIndex + 2}: Password must be at least 6 characters`);
+    }
+    
+    // Stall-specific validation
+    if (user.role === 'stall' && user.price && (isNaN(user.price) || user.price < 1)) {
+      errors.push(`Row ${rowIndex + 2}: Stall price must be a number >= 1`);
+    }
+    
+    return errors;
+  };
+
+  const processCSVData = (data) => {
+    const validUsers = [];
+    const allErrors = [];
+    
+    data.forEach((row, index) => {
+      // Clean and normalize data
+      const user = {
+        username: row.username?.trim(),
+        password: row.password?.trim(),
+        role: row.role?.trim().toLowerCase(),
+        name: row.name?.trim() || null,
+        price: row.price ? parseInt(row.price) : (row.role?.toLowerCase() === 'stall' ? 10 : undefined)
+      };
+      
+      const errors = validateUserData(user, index);
+      
+      if (errors.length === 0) {
+        validUsers.push(user);
+      } else {
+        allErrors.push(...errors);
+      }
+    });
+    
+    setCsvUsers(validUsers);
+    setCsvValidationErrors(allErrors);
+  };
+
   const handleCSVUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    
     setCsvFileName(file.name);
+    setCsvUsers([]);
+    setCsvValidationErrors([]);
+    
     Papa.parse(file, {
       header: true,
       skipEmptyLines: true,
       complete: (res) => {
-        const valid = res.data.filter(row => row.username && row.password);
-        setCsvUsers(valid);
+        if (res.errors.length > 0) {
+          alert(`CSV parsing errors: ${res.errors.map(e => e.message).join(', ')}`);
+          return;
+        }
+        processCSVData(res.data);
       },
+      error: (error) => {
+        alert(`Failed to parse CSV: ${error.message}`);
+      }
     });
   };
 
-  const handleBulkUpload = () => {
-    if (!csvUsers.length) return alert("No valid users in CSV");
-    if (!window.confirm(`Create ${csvUsers.length} users?`)) return;
-    runAction(() => bulkUsers(csvUsers), `Created ${csvUsers.length} users`);
+  const processBulkText = () => {
+    if (!bulkTextInput.trim()) return;
+    
     setCsvUsers([]);
-    setCsvFileName("");
+    setCsvValidationErrors([]);
+    
+    Papa.parse(bulkTextInput.trim(), {
+      header: true,
+      skipEmptyLines: true,
+      complete: (res) => {
+        if (res.errors.length > 0) {
+          alert(`Text parsing errors: ${res.errors.map(e => e.message).join(', ')}`);
+          return;
+        }
+        processCSVData(res.data);
+        setCsvFileName("Manual Text Input");
+      },
+      error: (error) => {
+        alert(`Failed to parse text: ${error.message}`);
+      }
+    });
+  };
+
+  const downloadSampleCSV = () => {
+    const sampleData = [
+      { username: 'visitor1', password: 'password123', role: 'visitor', name: 'John Doe', price: '' },
+      { username: 'visitor2', password: 'password456', role: 'visitor', name: 'Jane Smith', price: '' },
+      { username: 'stall1', password: 'stallpass123', role: 'stall', name: 'Game Stall 1', price: '15' },
+      { username: 'stall2', password: 'stallpass456', role: 'stall', name: 'Game Stall 2', price: '20' },
+      { username: 'admin2', password: 'adminpass123', role: 'admin', name: 'Admin User', price: '' }
+    ];
+    
+    const csv = Papa.unparse(sampleData);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'bulk_users_sample.csv');
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleBulkUpload = async () => {
+    if (!csvUsers.length) return alert("No valid users to create");
+    if (!window.confirm(`Create ${csvUsers.length} users?`)) return;
+    
+    setActionLoading(true);
+    try {
+      const response = await bulkUsers(csvUsers);
+      const result = response.data;
+      
+      // Show detailed results
+      let message = `✅ Bulk Upload Complete!\n\n`;
+      message += `✓ Successfully created: ${result.created_count} users\n`;
+      
+      if (result.error_count > 0) {
+        message += `⚠️ Errors encountered: ${result.error_count}\n\n`;
+        message += `Errors:\n${result.errors.slice(0, 5).join('\n')}`;
+        if (result.errors.length > 5) {
+          message += `\n... and ${result.errors.length - 5} more errors`;
+        }
+      }
+      
+      alert(message);
+      
+      // Clear form after upload
+      setCsvUsers([]);
+      setCsvValidationErrors([]);
+      setCsvFileName("");
+      setBulkTextInput("");
+      setShowBulkTextArea(false);
+      
+      // Clear file input
+      const fileInput = document.querySelector('input[type="file"]');
+      if (fileInput) fileInput.value = '';
+      
+      // Reload data
+      await loadData();
+      
+    } catch (err) {
+      const errorMsg = err?.response?.data?.error || 
+                      err?.response?.data?.message || 
+                      err.message || 
+                      "Bulk upload failed";
+      alert(`❌ Error: ${errorMsg}`);
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   const handleAttendanceSubmit = (e) => {
@@ -784,14 +946,164 @@ const AdminDashboard = () => {
           </div>
 
           <div className="card">
-            <h3 className="mb-md">Bulk User Upload (CSV)</h3>
-            <input type="file" accept=".csv" onChange={handleCSVUpload} disabled={isBusy} className="input" />
-            {csvFileName && <p className="mt-sm mb-sm">Selected: {csvFileName}</p>}
+            <h3 className="mb-md">Bulk User Upload</h3>
+            
+            {/* Format Instructions */}
+            <div style={{ 
+              backgroundColor: '#f0f9ff', 
+              border: '1px solid #0ea5e9', 
+              borderRadius: '6px', 
+              padding: '12px', 
+              marginBottom: '16px',
+              fontSize: '13px'
+            }}>
+              <h4 style={{ margin: '0 0 8px 0', color: '#0369a1' }}>📋 CSV Format Requirements</h4>
+              <p style={{ margin: '0 0 8px 0' }}>Your CSV file must include these columns (header row required):</p>
+              <div style={{ 
+                fontFamily: 'monospace', 
+                backgroundColor: '#ffffff', 
+                padding: '8px', 
+                borderRadius: '4px',
+                border: '1px solid #e0e7ff'
+              }}>
+                <strong>Required:</strong> username, password, role<br/>
+                <strong>Optional:</strong> name, price (for stalls only)
+              </div>
+              <p style={{ margin: '8px 0 0 0', color: '#0369a1' }}>
+                <strong>Roles:</strong> visitor, stall, admin
+              </p>
+            </div>
+
+            {/* Sample Template */}
+            <div style={{ marginBottom: '16px' }}>
+              <button 
+                className="btn btn-secondary btn-sm"
+                onClick={downloadSampleCSV}
+                disabled={isBusy}
+                style={{ marginRight: '8px' }}
+              >
+                📥 Download Sample CSV
+              </button>
+              <button 
+                className="btn btn-secondary btn-sm"
+                onClick={() => setShowBulkTextArea(!showBulkTextArea)}
+                disabled={isBusy}
+              >
+                ✏️ Manual Text Entry
+              </button>
+            </div>
+
+            {/* Manual Text Entry */}
+            {showBulkTextArea && (
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
+                  Manual Entry (CSV Format):
+                </label>
+                <textarea
+                  className="input"
+                  rows={8}
+                  placeholder={`username,password,role,name,price
+visitor1,pass123,visitor,John Doe,
+visitor2,pass456,visitor,Jane Smith,
+stall1,stallpass,stall,Game Stall 1,15
+admin2,adminpass,admin,Admin User,`}
+                  value={bulkTextInput}
+                  onChange={(e) => setBulkTextInput(e.target.value)}
+                  disabled={isBusy}
+                  style={{ fontFamily: 'monospace', fontSize: '12px' }}
+                />
+                <button
+                  className="btn btn-primary btn-sm mt-sm"
+                  onClick={processBulkText}
+                  disabled={isBusy || !bulkTextInput.trim()}
+                >
+                  Parse Text Input
+                </button>
+              </div>
+            )}
+
+            {/* File Upload */}
+            <input 
+              type="file" 
+              accept=".csv" 
+              onChange={handleCSVUpload} 
+              disabled={isBusy} 
+              className="input" 
+            />
+            {csvFileName && <p className="mt-sm mb-sm">📁 Selected: {csvFileName}</p>}
+            
+            {/* Validation Results */}
             {csvUsers.length > 0 && (
               <div className="mt-md">
-                <p className="mb-sm">{csvUsers.length} valid rows</p>
-                <button className="btn btn-success btn-full" onClick={handleBulkUpload} disabled={isBusy}>
-                  Upload {csvUsers.length} Users
+                <div style={{ 
+                  backgroundColor: '#f0fdf4', 
+                  border: '1px solid #22c55e', 
+                  borderRadius: '6px', 
+                  padding: '12px', 
+                  marginBottom: '12px' 
+                }}>
+                  <h4 style={{ margin: '0 0 8px 0', color: '#15803d' }}>✅ Validation Results</h4>
+                  <p style={{ margin: '0' }}>
+                    <strong>{csvUsers.length}</strong> valid users ready to create
+                  </p>
+                  {csvValidationErrors.length > 0 && (
+                    <div style={{ marginTop: '8px' }}>
+                      <p style={{ margin: '0 0 4px 0', color: '#dc2626' }}>
+                        <strong>⚠️ {csvValidationErrors.length} rows skipped:</strong>
+                      </p>
+                      <ul style={{ margin: '0', paddingLeft: '20px', fontSize: '12px', color: '#dc2626' }}>
+                        {csvValidationErrors.slice(0, 5).map((error, i) => (
+                          <li key={i}>{error}</li>
+                        ))}
+                        {csvValidationErrors.length > 5 && (
+                          <li>... and {csvValidationErrors.length - 5} more</li>
+                        )}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+
+                {/* Preview Table */}
+                <div style={{ marginBottom: '12px', maxHeight: '200px', overflowY: 'auto' }}>
+                  <table className="table" style={{ fontSize: '12px' }}>
+                    <thead>
+                      <tr>
+                        <th>Username</th>
+                        <th>Role</th>
+                        <th>Name</th>
+                        <th>Price</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {csvUsers.slice(0, 10).map((user, i) => (
+                        <tr key={i}>
+                          <td>{user.username}</td>
+                          <td>
+                            <span className={`badge badge-${user.role === 'admin' ? 'reward' : user.role === 'stall' ? 'payment' : 'topup'}`}>
+                              {user.role}
+                            </span>
+                          </td>
+                          <td>{user.name || '-'}</td>
+                          <td>{user.role === 'stall' ? (user.price || 10) : '-'}</td>
+                        </tr>
+                      ))}
+                      {csvUsers.length > 10 && (
+                        <tr>
+                          <td colSpan="4" style={{ textAlign: 'center', color: '#6b7280' }}>
+                            ... and {csvUsers.length - 10} more users
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                <button 
+                  className="btn btn-success btn-full" 
+                  onClick={handleBulkUpload} 
+                  disabled={isBusy}
+                >
+                  {actionLoading ? 'Creating Users...' : `🚀 Create ${csvUsers.length} Users`}
                 </button>
               </div>
             )}
