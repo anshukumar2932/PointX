@@ -56,7 +56,10 @@ try:
     # Create Supabase client
     supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
     logger.info("Supabase client initialized successfully")
-    
+    print("TRY Block")
+    print("SUPABASE KEY LOADED:", SUPABASE_KEY)
+    print("SUPABASE URL LOADED:", SUPABASE_URL)
+
     # Test connection (optional - can be disabled in production)
     if os.getenv('FLASK_ENV') == 'development':
         try:
@@ -69,6 +72,9 @@ try:
 except Exception as e:
     logger.error(f"Failed to initialize Supabase client: {e}")
     raise RuntimeError(f"Supabase initialization failed: {e}")
+    
+    print("SUPABASE KEY LOADED:", SUPABASE_KEY)
+    print("SUPABASE URL LOADED:", SUPABASE_URL)
 
 # Export client
 __all__ = ['supabase']
