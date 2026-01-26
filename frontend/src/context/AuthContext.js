@@ -3,6 +3,16 @@ import api from '../api/axios';
 
 const AuthContext = createContext();
 
+const isTokenExpired = (token) => {
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1]));
+    return Date.now() >= payload.exp * 1000;
+  } catch {
+    return true;
+  }
+};
+
+
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
@@ -15,18 +25,22 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-    const userData = localStorage.getItem('user');
-    
+useEffect(() => {
+    const token = localStorage.getItem("token");
+    const userData = localStorage.getItem("user");
+  
     if (token && userData) {
-      setUser(JSON.parse(userData));
-      api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      if (isTokenExpired(token)) {
+        logout(); // force logout
+      } else {
+        setUser(JSON.parse(userData));
+        api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+      }
     }
-    
+  
     setLoading(false);
   }, []);
-
+  
   const login = async (username, password) => {
     try {
       const response = await api.post('/auth/login', {
