@@ -129,11 +129,73 @@ def history():
         
         enriched_tx = {
             **tx,
-            "visitor_username": visitor_username
+            "visitor_username": visitor_username,
+            "is_pending": tx.get("score") is None  # Add pending status
         }
         enriched_transactions.append(enriched_tx)
 
     return jsonify(enriched_transactions), 200
+
+
+@stall_bp.route("/pending-games", methods=["GET"])
+@require_auth(["stall"])
+def pending_games():
+    """Get all pending games (transactions without scores) for this stall"""
+    stall_user_id = request.user["id"]
+    
+    # Get stall wallet
+    wallet_res = supabase.table("wallets") \
+        .select("id") \
+        .eq("user_id", stall_user_id) \
+        .execute()
+
+    if not wallet_res.data:
+        return jsonify({"error": "Stall wallet not found"}), 404
+
+    stall_wallet_id = wallet_res.data[0]["id"]
+
+    # Get stall via wallet_id
+    stall_res = supabase.table("stalls") \
+        .select("id") \
+        .eq("wallet_id", stall_wallet_id) \
+        .execute()
+
+    if not stall_res.data:
+        return jsonify({"error": "Stall not found"}), 404
+
+    stall_id = stall_res.data[0]["id"]
+
+    # Fetch pending transactions (score is null)
+    res = supabase.table("transactions") \
+        .select("id, from_wallet, to_wallet, points_amount, score, type, created_at") \
+        .eq("stall_id", stall_id) \
+        .eq("type", "play") \
+        .is_("score", "null") \
+        .order("created_at", desc=True) \
+        .execute()
+
+    # Enrich with visitor usernames
+    pending_games = []
+    for tx in res.data:
+        # Get visitor username from wallet
+        if tx.get("from_wallet"):
+            visitor_wallet_res = supabase.table("wallets") \
+                .select("username") \
+                .eq("id", tx["from_wallet"]) \
+                .execute()
+            
+            visitor_username = visitor_wallet_res.data[0]["username"] if visitor_wallet_res.data else "Unknown"
+        else:
+            visitor_username = "Unknown"
+        
+        pending_game = {
+            **tx,
+            "visitor_username": visitor_username,
+            "time_elapsed": tx["created_at"]  # Frontend can calculate elapsed time
+        }
+        pending_games.append(pending_game)
+
+    return jsonify(pending_games), 200
 
 
 @stall_bp.route("/visitor-balance/<wallet_id>", methods=["GET"])
