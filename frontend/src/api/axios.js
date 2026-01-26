@@ -14,26 +14,27 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-    
-    // Force HTTP protocol for localhost
-    if (config.baseURL && config.baseURL.includes('localhost')) {
-      config.baseURL = config.baseURL.replace('https://', 'http://');
-      config.url = config.url?.replace('https://', 'http://');
-    }
-    
     return config;
   },
-  (error) => {
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error)
 );
 
 // Add response interceptor for better error handling
 api.interceptors.response.use(
-  (response) => {
-    return response;
-  },
+  (response) => response,
   (error) => {
+    if (error.response?.status === 401) {
+      console.warn("JWT expired or invalid. Logging out.");
+
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+
+      // Prevent redirect loop
+      if (!window.location.pathname.includes("/login")) {
+        window.location.href = "/login";
+      }
+    }
+
     return Promise.reject(error);
   }
 );
