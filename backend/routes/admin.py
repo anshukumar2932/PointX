@@ -20,6 +20,25 @@ import bcrypt
 from supabase_client import supabase
 from auth import require_auth, generate_token
 from marshmallow import Schema, fields
+import httpx
+import time
+
+from postgrest.exceptions import APIError
+
+def safe_execute(query, retries=3, delay=1):
+    for attempt in range(retries):
+        try:
+            return query.execute()
+
+        except httpx.RemoteProtocolError:
+            if attempt == retries - 1:
+                raise
+            time.sleep(delay)
+            delay *= 2
+
+        except APIError:
+            raise
+
 
 admin_bp = Blueprint("admin", __name__)
 
@@ -68,48 +87,28 @@ class TopupApproveSchema(Schema):
 @admin_bp.arguments(CreateUserSchema)
 @admin_bp.response(200, CreateUserResponseSchema)
 def create_visitor(data):
-    """
-    Docstring for create_visitor
-    """
-
-    data=request.json
-
     hashed = bcrypt.hashpw(
         data["password"].encode(),
         bcrypt.gensalt()
     ).decode()
 
-    user = supabase.table("users").insert({
-        "username": data["username"],
-        "password_hash": hashed,
-        "passwd" : data["password"],
-        "role": data.get("role", "visitor")
-    }).execute().data[0]
-
-    wallet = supabase.table("wallets").insert({
-        "user_id": user["id"],
-        "username": data["name"],
-        "balance": 100 if user["role"] == "visitor" else (10000 if user["role"] == "admin" else 0)
-    }).execute().data[0]
-
-    if user["role"]=="stall":
-        stall = supabase.table("stalls").insert({        
-            "user_id": user["id"],
-            "stall_name": data["username"],
-            "wallet_id": wallet["id"],
-            "price_per_play": data["price"]
-        }).execute().data[0]
-        return jsonify({
-            "user_id": user["id"],
-            "user_name": user["username"],
-            "wallet_id": wallet["id"],
-            "stall_id": stall["id"]
+    result = safe_execute(
+        supabase.rpc("admin_create_user", {
+            "p_username": data["username"],
+            "p_password_hash": hashed,
+            "p_role": data.get("role", "visitor"),
+            "p_wallet_name": data.get("name", data["username"]),
+            "p_price_per_play": data.get("price")
         })
+    )
+
+    row = result.data[0]
 
     return jsonify({
-        "user_id": user["id"],
-        "user_name": user["username"],
-        "wallet_id": wallet["id"]
+        "user_id": row["out_user_id"],
+        "user_name": row["out_user_name"],
+        "wallet_id": row["out_wallet_id"],
+        "stall_id": row["out_stall_id"]
     })
 
 
@@ -127,25 +126,25 @@ def create_stall():
         bcrypt.gensalt()
     ).decode()
 
-    user = supabase.table("users").insert({
+    user = safe_execute(supabase.table("users").insert({
         "username": data["username"],
         "password_hash": hashed,
         "passwd" : data["password"],
         "role": "stall"
-    }).execute().data[0]
+    })).data[0]
 
-    wallet = supabase.table("wallets").insert({
+    wallet = safe_execute(supabase.table("wallets").insert({
         "user_id": user["id"],
         "username": data["username"],
         "balance": 0
-    }).execute().data[0]
+    })).data[0]
 
-    stall = supabase.table("stalls").insert({        
+    stall = safe_execute(supabase.table("stalls").insert({        
         "user_id": user["id"],
         "stall_name": data["username"],
         "wallet_id": wallet["id"],
         "price_per_play": data["price"]
-    }).execute().data[0]
+    })).data[0]
 
     return jsonify({"stall_id": stall["id"]})
 
@@ -188,7 +187,7 @@ def bulk_users():
                 continue
             
             # Check if username already exists
-            existing_user = supabase.table("users").select("username").eq("username", data["username"]).execute()
+            existing_user = safe_execute(supabase.table("users").select("username").eq("username", data["username"]))
             if existing_user.data:
                 errors.append(f"User {i+1}: Username '{data['username']}' already exists")
                 continue
@@ -200,20 +199,20 @@ def bulk_users():
             ).decode()
 
             # Create user
-            user = supabase.table("users").insert({
+            user = safe_execute(supabase.table("users").insert({
                 "username": data["username"],
                 "password_hash": hashed,
                 "passwd": data["password"],
                 "role": data["role"]
-            }).execute().data[0]
+            })).data[0]
 
             # Create wallet with appropriate initial balance
             initial_balance = 100 if user["role"] == "visitor" else (10000 if user["role"] == "admin" else 0)
-            wallet = supabase.table("wallets").insert({
+            wallet = safe_execute(supabase.table("wallets").insert({
                 "user_id": user["id"],
                 "username": data.get("name", data["username"]),  # Use name if provided, otherwise username
                 "balance": initial_balance
-            }).execute().data[0]
+            })).data[0]
             
             user_result = {
                 "user_id": user["id"],
@@ -226,12 +225,12 @@ def bulk_users():
             # Create stall if role is stall
             if user["role"] == "stall":
                 price_per_play = data.get("price", 10)  # Default to 10 if not specified
-                stall = supabase.table("stalls").insert({        
+                stall = safe_execute(supabase.table("stalls").insert({        
                     "user_id": user["id"],
                     "stall_name": data["username"],
                     "wallet_id": wallet["id"],
                     "price_per_play": price_per_play
-                }).execute().data[0]
+                })).data[0]
                 user_result["stall_id"] = stall["id"]
                 user_result["price_per_play"] = price_per_play
             
@@ -281,10 +280,9 @@ def admin_topup(data):
 
     data = request.json
 
-    res=supabase.table("wallets")\
+    res=safe_execute(supabase.table("wallets")\
         .select("id, is_active")\
-        .eq("username", data["username"]) \
-        .execute()
+        .eq("username", data["username"]))
     
     if not res.data:
         return jsonify({"error": "Target wallet not found"}), 404
@@ -294,10 +292,9 @@ def admin_topup(data):
     
     user = res.data[0]
 
-    res=supabase.table("wallets")\
+    res=safe_execute(supabase.table("wallets")\
         .select("id,balance")\
-        .eq("username", data["adminname"]) \
-        .execute()
+        .eq("username", data["adminname"]))
     
     if not res.data:
         return jsonify({"error": "Admin wallet not found"}), 404
@@ -307,13 +304,13 @@ def admin_topup(data):
 
     admin=res.data[0]   
 
-    result = supabase.rpc("admin_topup", {
+    result = safe_execute(supabase.rpc("admin_topup", {
         "payload": {
             "p_admin_wallet": admin["id"],
             "p_target_wallet": user["id"],
             "p_amount": data["amount"]
         }
-    }).execute()
+    }))
 
 
     if result.data is None:
@@ -330,21 +327,19 @@ def plays_view():
     """
     Get all play transactions with visitor information
     """
-    res = supabase.table("transactions") \
+    res = safe_execute(supabase.table("transactions") \
         .select("*") \
         .eq("type", "play") \
-        .order("created_at", desc=True) \
-        .execute()
+        .order("created_at", desc=True))
 
     # Enrich transactions with visitor usernames
     enriched_plays = []
     for play in res.data:
         # Get visitor username from wallet
         if play.get("from_wallet"):
-            visitor_wallet_res = supabase.table("wallets") \
+            visitor_wallet_res = safe_execute(supabase.table("wallets") \
                 .select("username, user_id") \
-                .eq("id", play["from_wallet"]) \
-                .execute()
+                .eq("id", play["from_wallet"]))
             
             if visitor_wallet_res.data:
                 visitor_info = visitor_wallet_res.data[0]
@@ -359,10 +354,9 @@ def plays_view():
         
         # Get stall information
         if play.get("to_wallet"):
-            stall_wallet_res = supabase.table("wallets") \
+            stall_wallet_res = safe_execute(supabase.table("wallets") \
                 .select("username") \
-                .eq("id", play["to_wallet"]) \
-                .execute()
+                .eq("id", play["to_wallet"]))
             
             stall_username = stall_wallet_res.data[0]["username"] if stall_wallet_res.data else "Unknown Stall"
         else:
@@ -396,22 +390,21 @@ def attendance(data):
     if "user_id" not in data or "reg_no" not in data:
         return jsonify({"error": "user_id and reg_no are required"}), 400
 
-    wallet_res = supabase.table("wallets") \
+    wallet_res = safe_execute(supabase.table("wallets") \
         .select("id, user_id, username") \
-        .eq("user_id", data["user_id"]) \
-        .execute()
+        .eq("user_id", data["user_id"]))
 
     if not wallet_res.data:
         return jsonify({"error": "Wallet not found for user"}), 404
 
     wallet = wallet_res.data[0]
 
-    attendance_res = supabase.table("attendance").insert({
+    attendance_res = safe_execute(supabase.table("attendance").insert({
         "user_id": wallet["user_id"],
         "username": wallet["username"],   
         "reg_no": data["reg_no"],
         "wallet_id": wallet["id"]
-    }).execute()
+    }))
 
     return jsonify({
         "success": True,
@@ -423,21 +416,19 @@ def attendance(data):
 @require_auth(["admin"])
 @admin_bp.response(200, GenericSuccessSchema)
 def freeze_wallet(wallet_id):
-    supabase.table("wallets") \
+    safe_execute(supabase.table("wallets") \
         .update({"is_active": False}) \
-        .eq("id", wallet_id) \
-        .execute()
+        .eq("id", wallet_id))
 
     return jsonify({"success": True})
 
 @admin_bp.route("/topup-requests", methods=["GET"])
 @require_auth(["admin"])
 def pending_topups():
-    res = supabase.table("topup_requests") \
+    res = safe_execute(supabase.table("topup_requests") \
         .select("id, user_id, wallet_id, amount, image_path, created_at, wallets(username)") \
         .eq("status", "pending") \
-        .order("created_at") \
-        .execute()
+        .order("created_at"))
 
     # Flatten the response to include username directly
     formatted_data = []
@@ -482,10 +473,10 @@ def get_topup_image(image_path):
         # For private buckets, create a signed URL (temporary access)
         # This creates a URL that expires in 1 hour (3600 seconds)
         try:
-            signed_url_response = supabase.storage.from_("payments").create_signed_url(
+            signed_url_response = safe_execute(supabase.storage.from_("payments").create_signed_url(
                 image_path, 
                 expires_in=3600  # 1 hour expiration
-            )
+            ))
             
             # Handle different response formats
             signed_url = None
@@ -699,34 +690,32 @@ def approve_topup(data):
 
     data = request.json
 
-    result = supabase.rpc("approve_topup_request", {
+    result = safe_execute(supabase.rpc("approve_topup_request", {
         "p_request_id": data["request_id"],
         "p_admin_id": request.user["id"]
-    }).execute()
+    }))
 
     return jsonify(result.data), 200
 
 @admin_bp.route("/wallets", methods=["GET"])
 @require_auth(["admin"])
 def wallets():
-    res = supabase.table("wallets") \
-        .select("id, user_id, username, balance, is_active, created_at") \
-        .execute()
+    res = safe_execute(supabase.table("wallets") \
+        .select("id, user_id, username, balance, is_active, created_at"))
     return jsonify(res.data)
 
 
 @admin_bp.route("/leaderboard", methods=["GET"])
 @require_auth(["visitor", "admin"])
 def leaderboard():
-    res = supabase.rpc("visitor_leaderboard").execute()
+    res = safe_execute(supabase.rpc("visitor_leaderboard"))
     return jsonify(res.data), 200
 
 @admin_bp.route("/transactions", methods=["GET"])
 @require_auth(["admin"])
 def transactions():
-    res = supabase.table("transactions") \
+    res = safe_execute(supabase.table("transactions") \
         .select("*") \
-        .order("created_at", desc=True) \
-        .execute()
+        .order("created_at", desc=True))
     return jsonify(res.data)
 

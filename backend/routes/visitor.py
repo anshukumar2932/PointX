@@ -11,7 +11,24 @@ from supabase_client import supabase
 from auth import require_auth, generate_token
 from PIL import Image
 import io
+import httpx
 import time
+
+from postgrest.exceptions import APIError
+
+def safe_execute(query, retries=3, delay=1):
+    for attempt in range(retries):
+        try:
+            return query.execute()
+
+        except httpx.RemoteProtocolError:
+            if attempt == retries - 1:
+                raise
+            time.sleep(delay)
+            delay *= 2
+
+        except APIError:
+            raise
 
 
 def compress_image(
@@ -54,15 +71,13 @@ visitor_bp = Blueprint("visitor", __name__)
 def wallet():
     user_id = request.user["id"]
 
-    wallet_res = supabase.table("wallets") \
+    wallet_res = safe_execute(supabase.table("wallets") \
         .select("id, balance, is_active") \
-        .eq("user_id", user_id) \
-        .single() \
-        .execute()
+        .eq("user_id", user_id))
 
     if not wallet_res.data:
         return jsonify({"error": "Wallet not found"}), 404
-
+    wallet_res=wallet_res.data[0]
     return jsonify({
         "wallet_id": wallet_res.data["id"],
         "balance": wallet_res.data["balance"],
@@ -76,28 +91,26 @@ def wallet():
 def history():
     user_id = request.user["id"]
 
-    res = supabase.table("wallets") \
+    res = safe_execute(supabase.table("wallets") \
         .select("id") \
-        .eq("user_id", user_id) \
-        .execute()
+        .eq("user_id", user_id) )
 
     if not res.data:
         return jsonify({"error": "Wallet not found"}), 404
 
     wallet_id = res.data[0]["id"]
 
-    res = supabase.table("transactions") \
+    res = safe_execute(supabase.table("transactions") \
         .select("id, from_wallet, to_wallet, points_amount, type, created_at") \
         .or_(f"from_wallet.eq.{wallet_id},to_wallet.eq.{wallet_id}") \
-        .order("created_at", desc=True) \
-        .execute()
+        .order("created_at", desc=True) )
 
-    return jsonify(res.data), 200\
+    return jsonify(res.data), 200
     
 @visitor_bp.route("/leaderboard", methods=["GET"])
 @require_auth(["visitor", "admin"])
 def leaderboard():
-    res = supabase.rpc("visitor_leaderboard").execute()
+    res = safe_execute(supabase.rpc("visitor_leaderboard"))
     return jsonify(res.data), 200
 
 @visitor_bp.route("/topup-test", methods=["GET"])
@@ -108,19 +121,18 @@ def test_topup_dependencies():
         user_id = request.user["id"]
         
         # Test 1: Check wallet
-        wallet_res = supabase.table("wallets") \
+        wallet_res = safe_execute(supabase.table("wallets") \
             .select("id, is_active") \
-            .eq("user_id", user_id) \
-            .single() \
-            .execute()
+            .eq("user_id", user_id))
         
         wallet_status = "✅ Found" if wallet_res.data else "❌ Not found"
-        wallet_active = "✅ Active" if wallet_res.data and wallet_res.data["is_active"] else "❌ Inactive"
+        wallet_active = "✅ Active" if wallet_res.data and wallet_res.data[0]["is_active"] else "❌ Inactive"
         
         # Test 2: Check storage bucket
         try:
             bucket_list = supabase.storage.list_buckets()
-            payments_bucket_exists = any(bucket.name == "payments" for bucket in bucket_list if hasattr(bucket_list, '__iter__'))
+            payments_bucket_exists = any((b.name if hasattr(b, "name") else b.get("name")) == "payments" for b in bucket_list)
+
             bucket_status = "✅ Exists" if payments_bucket_exists else "❌ Missing"
         except Exception as e:
             bucket_status = f"❌ Error: {str(e)}"
@@ -128,7 +140,7 @@ def test_topup_dependencies():
         # Test 3: Check table structure
         try:
             # Try to query the topup_requests table structure
-            test_query = supabase.table("topup_requests").select("*").limit(1).execute()
+            test_query = safe_execute(supabase.table("topup_requests").select("*").limit(1))
             table_status = "✅ Accessible"
         except Exception as e:
             table_status = f"❌ Error: {str(e)}"
@@ -196,47 +208,47 @@ def create_topup_request():
 
         # Get wallet
         try:
-            wallet_res = supabase.table("wallets") \
+            wallet_res = safe_execute(supabase.table("wallets") \
                 .select("id, is_active") \
-                .eq("user_id", user_id) \
-                .single() \
-                .execute()
+                .eq("user_id", user_id) )
 
             if not wallet_res.data:
                 return jsonify({"error": "Wallet not found"}), 404
             
-            if not wallet_res.data["is_active"]:
+            if not wallet_res.data[0]["is_active"]:
                 return jsonify({"error": "Wallet inactive"}), 403
 
-            wallet_id = wallet_res.data["id"]
+            wallet_id = wallet_res.data[0]["id"]
         except Exception as e:
             return jsonify({"error": f"Failed to fetch wallet: {str(e)}"}), 500
 
         # Upload to storage
         try:
-            path = f"topups/{image_hash}.jpg"
-            upload_result = supabase.storage.from_("payments").upload(
-                path,
-                compressed,
-                {"content-type": "image/jpeg"}
-            )
+            path = f"topups/{user_id}/{image_hash}.jpg"
             
             # Check if upload was successful
-            if hasattr(upload_result, 'error') and upload_result.error:
-                return jsonify({"error": f"Failed to upload image: {upload_result.error}"}), 500
+            try:
+                supabase.storage.from_("payments").upload(
+                    path,
+                    compressed,
+                    {"content-type": "image/jpeg"}
+                )
+            except Exception as e:
+                return jsonify({"error": f"Upload failed: {str(e)}"}), 500
+
                 
         except Exception as e:
             return jsonify({"error": f"Failed to upload image to storage: {str(e)}"}), 500
 
         # Insert topup request
         try:
-            insert_result = supabase.table("topup_requests").insert({
+            insert_result = safe_execute(supabase.table("topup_requests").upsert({
                 "user_id": user_id,
                 "wallet_id": wallet_id,
                 "amount": amount,
                 "image_path": path,
                 "image_hash": image_hash
-            }).execute()
+            }))
             
             if hasattr(insert_result, 'error') and insert_result.error:
                 return jsonify({"error": f"Failed to create topup request: {insert_result.error}"}), 500
