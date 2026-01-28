@@ -14,6 +14,7 @@ from supabase_client import supabase
 from auth import require_auth
 
 
+
 stall_bp = Blueprint("stall", __name__)
 
 def safe_execute(query):
@@ -30,41 +31,69 @@ def start_game():
     if "visitor_wallet" not in data:
         return jsonify({"error": "visitor_wallet required"}), 400
 
+    visitor_wallet_id = data["visitor_wallet"]
     stall_user_id = request.user["id"]
 
+    # 1️⃣ Fetch visitor wallet
+    visitor_wallet = supabase.table("wallets") \
+        .select("balance, is_active") \
+        .eq("id", visitor_wallet_id) \
+        .single() \
+        .execute()
+
+    if not visitor_wallet.data:
+        return jsonify({"error": "Visitor wallet not found"}), 404
+
+    if not visitor_wallet.data["is_active"]:
+        return jsonify({"error": "Visitor wallet is frozen"}), 403
+
+    if visitor_wallet.data["balance"] <= 0:
+        return jsonify({"error": "Insufficient balance"}), 400
+
+    # 2️⃣ Prevent multiple active games for same visitor
+    active_game = supabase.table("transactions") \
+        .select("id") \
+        .eq("from_wallet", visitor_wallet_id) \
+        .eq("type", "play") \
+        .is_("score", "null") \
+        .execute()
+
+    if active_game.data:
+        return jsonify({"error": "Visitor already has an active game"}), 409
+
+    # 3️⃣ Get stall wallet
     wallet_res = supabase.table("wallets") \
         .select("id") \
         .eq("user_id", stall_user_id) \
+        .single() \
         .execute()
+
     if not wallet_res.data:
         return jsonify({"error": "Stall wallet not found"}), 404
 
-    stall_wallet_id = wallet_res.data[0]["id"]
     stall_res = supabase.table("stalls") \
         .select("id") \
-        .eq("wallet_id", stall_wallet_id) \
+        .eq("wallet_id", wallet_res.data["id"]) \
+        .single() \
         .execute()
 
     if not stall_res.data:
         return jsonify({"error": "Stall not found"}), 404
 
-    stall_id = stall_res.data[0]["id"]
+    stall_id = stall_res.data["id"]
 
     result = supabase.rpc("start_game_play", {
-        "p_visitor_wallet": data["visitor_wallet"],
+        "p_visitor_wallet": visitor_wallet_id,
         "p_stall_id": stall_id
     }).execute()
 
     if not result.data:
-        return jsonify({"error": "Play failed"}), 500
+        return jsonify({"error": "Failed to start game"}), 500
 
     return jsonify({
         "transaction_id": result.data["transaction_id"],
         "status": "started"
     }), 201
-
-
-
 
 
 @stall_bp.route("/submit-score", methods=["POST"])

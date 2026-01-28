@@ -29,6 +29,23 @@ const StallDashboard = () => {
   const [pendingGames, setPendingGames] = useState([]);
   const [wallet, setWallet] = useState(null);
   const [selectedPendingGame, setSelectedPendingGame] = useState(null);
+  const formatUTC = (utcString) => {
+    if (!utcString) return "";
+    const date = new Date(utcString.endsWith("Z") ? utcString : utcString + "Z");
+
+    return date.toLocaleString("en-IN", {
+      timeZone: "Asia/Kolkata",
+      year: "numeric",
+      month: "short",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: true,
+    });
+  };
+
+  
 
   useEffect(() => {
     const handleKeyPress = (event) => {
@@ -217,7 +234,7 @@ const StallDashboard = () => {
   const memoizedPlays = React.useMemo(() => {
     return plays.map((p) => ({
       ...p,
-      formattedDate: new Date(p.created_at).toLocaleString(),
+      formattedDate: formatUTC(p.created_at),
       visitorId: p.from_wallet ? `${p.from_wallet.slice(0, 8)}...` : "No ID"
     }));
   }, [plays]);
@@ -324,7 +341,16 @@ const StallDashboard = () => {
                   </thead>
                   <tbody>
                     {pendingGames.map((game) => {
-                      const timeAgo = Math.floor((new Date() - new Date(game.created_at)) / (1000 * 60));
+                      const nowUTC = Date.now();
+                      const gameUTC = Date.parse(
+                        game.created_at.endsWith("Z")
+                          ? game.created_at
+                          : game.created_at + "Z"
+                      );
+
+                      const timeAgo = Math.floor((nowUTC - gameUTC) / (1000 * 60));
+
+
                       return (
                         <tr key={game.id}>
                           <td data-label="Visitor">
@@ -337,7 +363,7 @@ const StallDashboard = () => {
                           </td>
                           <td data-label="Started">
                             <span className="date-text">
-                              {new Date(game.created_at).toLocaleString()}
+                              {formatUTC(game.created_at)}                            
                             </span>
                           </td>
                           <td data-label="Time Ago">
@@ -391,7 +417,7 @@ const StallDashboard = () => {
 
               {selectedPendingGame && (
                 <p className="game-started">
-                  🕒 Started: {new Date(selectedPendingGame.created_at).toLocaleString()}
+                  🕒 Started: {formatUTC(selectedPendingGame.created_at)}
                 </p>
               )}
             </div>
@@ -492,7 +518,7 @@ const StallDashboard = () => {
                       )}
                     </td>
                     <td data-label="Points">
-                      <span className="points-value">{p.points_amount || 0} pts</span>
+                      <span className="points-value">{p.points || 0} pts</span>
                     </td>
                     <td data-label="Date">
                       <span className="date-text">{p.formattedDate}</span>
