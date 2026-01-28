@@ -71,18 +71,23 @@ visitor_bp = Blueprint("visitor", __name__)
 def wallet():
     user_id = request.user["id"]
 
-    wallet_res = safe_execute(supabase.table("wallets") \
-        .select("id, balance, is_active") \
-        .eq("user_id", user_id))
+    res = safe_execute(
+        supabase.table("wallets")
+        .select("id, balance, is_active")
+        .eq("user_id", user_id)
+    )
 
-    if not wallet_res.data:
+    if not res.data:
         return jsonify({"error": "Wallet not found"}), 404
-    wallet_res=wallet_res.data[0]
+
+    wallet = res.data[0]   # ← this is now a dict
+
     return jsonify({
-        "wallet_id": wallet_res.data["id"],
-        "balance": wallet_res.data["balance"],
-        "is_active": wallet_res.data["is_active"]
+        "wallet_id": wallet["id"],
+        "balance": wallet["balance"],
+        "is_active": wallet["is_active"]
     }), 200
+
 
 
 
