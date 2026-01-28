@@ -40,34 +40,20 @@ def create_app(config_name=None):
     
     return app
 
-
-
 def setup_logging(app):
-    """Configure application logging"""
-    if not app.debug and not app.testing:
-        # Create logs directory if it doesn't exist (for local development)
-        # Render handles logging automatically
-        try:
-            if not os.path.exists('logs'):
-                os.mkdir('logs')
-            
-            # Setup file handler with rotation
-            file_handler = RotatingFileHandler(
-                'logs/pointx.log', 
-                maxBytes=10240000, 
-                backupCount=10
-            )
-            file_handler.setFormatter(logging.Formatter(
-                '%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]'
-            ))
-            file_handler.setLevel(logging.INFO)
-            app.logger.addHandler(file_handler)
-        except Exception:
-            # If file logging fails (e.g., on Render), just use console
-            pass
-        
-        app.logger.setLevel(logging.INFO)
-        app.logger.info('PointX application startup')
+    app.logger.setLevel(logging.INFO)
+
+    handler = logging.StreamHandler()
+    handler.setLevel(logging.INFO)
+    handler.setFormatter(logging.Formatter(
+        '%(asctime)s %(levelname)s: %(message)s'
+    ))
+
+    if not app.logger.handlers:
+        app.logger.addHandler(handler)
+
+    app.logger.info("Logging initialized")
+
 
 
 def setup_cors(app):

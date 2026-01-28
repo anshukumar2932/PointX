@@ -112,74 +112,16 @@ def submit_score():
     return jsonify(result.data), 200
 
 
-
 @stall_bp.route("/history", methods=["GET"])
 @require_auth(["stall"])
 def history():
-    stall_user_id = request.user["id"]
-
-    wallet_res = supabase.table("wallets") \
-        .select("id") \
-        .eq("user_id", stall_user_id) \
-        .single() \
-        .execute()
-
-    if not wallet_res.data:
-        return jsonify([]), 200
-
-    stall_res = supabase.table("stalls") \
-        .select("id") \
-        .eq("wallet_id", wallet_res.data["id"]) \
-        .single() \
-        .execute()
-
-    if not stall_res.data:
-        return jsonify([]), 200
-
-    stall_id = stall_res.data["id"]
-
-    tx_res = supabase.table("transactions") \
-        .select("""
-            id,
-            from_wallet,
-            points_amount,
-            score,
-            created_at
-        """) \
-        .eq("stall_id", stall_id) \
-        .eq("type", "play") \
-        .order("created_at", desc=True) \
-        .execute()
-
-    if not tx_res.data:
-        return jsonify([]), 200
-
-    wallet_ids = list({tx["from_wallet"] for tx in tx_res.data})
-
-    wallet_res = supabase.table("wallets") \
-        .select("id, username") \
-        .in_("id", wallet_ids) \
-        .execute()
-
-    wallet_map = {
-        w["id"]: w["username"]
-        for w in (wallet_res.data or [])
-    }
-
-    history = []
-    for tx in tx_res.data:
-        history.append({
-            "transaction_id": tx["id"],
-            "visitor_wallet": tx["from_wallet"],
-            "visitor_username": wallet_map.get(tx["from_wallet"], "Unknown"),
-            "points": tx["points_amount"],
-            "score": tx["score"],
-            "status": "pending" if tx["score"] is None else "completed",
-            "created_at": tx["created_at"]
+    result = safe_execute(
+        supabase.rpc("get_stall_history", {
+            "p_user_id": request.user["id"]
         })
+    )
 
-    return jsonify(history), 200
-
+    return jsonify(result.data or []), 200
 
 
 

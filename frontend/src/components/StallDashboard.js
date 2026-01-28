@@ -30,8 +30,12 @@ const StallDashboard = () => {
   const [wallet, setWallet] = useState(null);
   const [selectedPendingGame, setSelectedPendingGame] = useState(null);
   const formatUTC = (utcString) => {
-    if (!utcString) return "";
-    const date = new Date(utcString.endsWith("Z") ? utcString : utcString + "Z");
+    if (!utcString) return "—";
+    const date = new Date(
+      utcString.endsWith("Z") ? utcString : utcString + "Z"
+    );
+
+    if (isNaN(date.getTime())) return "—";
 
     return date.toLocaleString("en-IN", {
       timeZone: "Asia/Kolkata",
@@ -44,6 +48,7 @@ const StallDashboard = () => {
       hour12: true,
     });
   };
+
 
   
 
@@ -235,9 +240,12 @@ const StallDashboard = () => {
     return plays.map((p) => ({
       ...p,
       formattedDate: formatUTC(p.created_at),
-      visitorId: p.from_wallet ? `${p.from_wallet.slice(0, 8)}...` : "No ID"
+      visitorId: p.visitor_wallet
+        ? `${p.visitor_wallet.slice(0, 8)}...`
+        : "No ID",
     }));
   }, [plays]);
+
 
   return (
     <div className="container">
@@ -503,7 +511,7 @@ const StallDashboard = () => {
               </thead>
               <tbody>
                 {memoizedPlays.map((p) => (
-                  <tr key={p.id}>
+                  <tr key={p.transaction_id}>
                     <td data-label="Visitor">
                       <span className="wallet-id">{p.visitorId}</span>
                     </td>
