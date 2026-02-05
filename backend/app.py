@@ -67,10 +67,6 @@ def setup_cors(app):
         env_origins_list = [origin.strip() for origin in env_origins.split(',') if origin.strip()]
         allowed_origins.extend(env_origins_list)
     
-    # Always allow the specific Vercel domain for production
-    if 'https://pointx-fyi.vercel.app' not in allowed_origins:
-        allowed_origins.append('https://pointx-fyi.vercel.app')
-    
     app.logger.info(f'CORS allowed origins: {allowed_origins}')
     
     # Use more permissive CORS for local development

@@ -231,23 +231,22 @@ def create_topup_request():
         try:
             path = f"topups/{user_id}/{image_hash}.jpg"
             
+            upload_result = supabase.storage.from_("payments").upload(
+                path,
+                compressed,
+                {"content-type": "image/jpeg"}
+            )
+            
             # Check if upload was successful
-            try:
-                supabase.storage.from_("payments").upload(
-                    path,
-                    compressed,
-                    {"content-type": "image/jpeg"}
-                )
-            except Exception as e:
-                return jsonify({"error": f"Upload failed: {str(e)}"}), 500
-
+            if hasattr(upload_result, 'error') and upload_result.error:
+                return jsonify({"error": f"Storage upload failed: {upload_result.error}"}), 500
                 
         except Exception as e:
             return jsonify({"error": f"Failed to upload image to storage: {str(e)}"}), 500
 
         # Insert topup request
         try:
-            insert_result = safe_execute(supabase.table("topup_requests").upsert({
+            insert_result = safe_execute(supabase.table("topup_requests").insert({
                 "user_id": user_id,
                 "wallet_id": wallet_id,
                 "amount": amount,

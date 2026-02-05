@@ -304,14 +304,6 @@ const AdminDashboard = () => {
     }
   };
 
-  const testImageUpload = async () => {
-    try {
-      const response = await api.post('/admin/test-image-upload');
-      alert(`Test Upload Result (Private Bucket):\n${JSON.stringify(response.data, null, 2)}`);
-    } catch (error) {
-      alert(`Test upload failed: ${error.response?.data?.error || error.message}`);
-    }
-  };
 
   // Handle keyboard events for image modal
   useEffect(() => {
@@ -743,17 +735,6 @@ const AdminDashboard = () => {
             >
               🔍 Debug Storage
             </button>
-            <button
-              className="btn btn-secondary btn-sm"
-              onClick={testImageUpload}
-              disabled={isBusy}
-              style={{ fontSize: '12px' }}
-            >
-              🧪 Test Upload
-            </button>
-            <span style={{ fontSize: '12px', color: '#6b7280' }}>
-              🔒 Private bucket - Use these tools to diagnose access issues
-            </span>
           </div>
           
           {topupRequests.length === 0 ? (
