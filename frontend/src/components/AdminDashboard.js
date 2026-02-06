@@ -76,17 +76,39 @@ const AdminDashboard = () => {
   // Data Loading
   // ────────────────────────────────────────────────
 
+  const cacheRef = React.useRef({});
+  const CACHE_MS = 30000; // 30 seconds
+
   const loadData = useCallback(async () => {
+    // Check cache first
+    if (cacheRef.current[activeTab] && 
+        Date.now() - cacheRef.current[activeTab].time < CACHE_MS) {
+      // Use cached data
+      const cached = cacheRef.current[activeTab].data;
+      if (cached.users) setUsers(cached.users);
+      if (cached.plays) setPlays(cached.plays);
+      if (cached.topupRequests) setTopupRequests(cached.topupRequests);
+      if (cached.leaderboard) setLeaderboard(cached.leaderboard);
+      return;
+    }
+
     setLoading(true);
     try {
+      const loadedData = {};
+
       if (["overview", "users", "wallets"].includes(activeTab)) {
         // Get users with wallet data joined
         const usersRes = await getAllUsers();
         const walletsRes = await api.get("/admin/wallets");
         
-        // Join user data with wallet data
+        // Create wallet map for O(1) lookup instead of O(n²)
+        const walletMap = Object.fromEntries(
+          (walletsRes.data || []).map(w => [w.user_id, w])
+        );
+        
+        // Join user data with wallet data in O(n) time
         const usersWithWallets = (usersRes.data || []).map(user => {
-          const wallet = (walletsRes.data || []).find(w => w.user_id === user.id);
+          const wallet = walletMap[user.id];
           return {
             ...user,
             balance: wallet?.balance || 0,
@@ -96,22 +118,32 @@ const AdminDashboard = () => {
         });
         
         setUsers(usersWithWallets);
+        loadedData.users = usersWithWallets;
       }
 
       if (["overview", "plays"].includes(activeTab)) {
         const res = await getPlays();
         setPlays(res.data || []);
+        loadedData.plays = res.data || [];
       }
 
       if (activeTab === "topups") {
         const res = await getPendingTopups();
         setTopupRequests(res.data || []);
+        loadedData.topupRequests = res.data || [];
       }
 
       if (activeTab === "leaderboard") {
         const res = await getLeaderboard();
         setLeaderboard(res.data || []);
+        loadedData.leaderboard = res.data || [];
       }
+
+      // Cache the loaded data
+      cacheRef.current[activeTab] = {
+        time: Date.now(),
+        data: loadedData
+      };
     } catch (err) {
       alert("Failed to load data.");
     } finally {
@@ -132,6 +164,10 @@ const AdminDashboard = () => {
     try {
       await actionFn();
       alert(successMessage);
+      // Clear cache for current tab to force refresh
+      if (cacheRef.current[activeTab]) {
+        delete cacheRef.current[activeTab];
+      }
       await loadData();
     } catch (err) {
       const msg =
@@ -143,7 +179,7 @@ const AdminDashboard = () => {
     } finally {
       setActionLoading(false);
     }
-  }, [loadData]);
+  }, [loadData, activeTab]);
 
   // ────────────────────────────────────────────────
   // QR Scanner (camera) – only when attendance tab is active

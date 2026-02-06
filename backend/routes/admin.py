@@ -168,9 +168,6 @@ def bulk_users():
     if len(inp) == 0:
         return jsonify({"error": "No users provided"}), 400
     
-    if len(inp) > 100:  # Limit bulk operations
-        return jsonify({"error": "Maximum 100 users allowed per bulk operation"}), 400
-    
     created_users = []
     errors = []
     
@@ -260,6 +257,7 @@ def user_view():
     """
     res=supabase.table("users")\
         .select("*")\
+        .limit(1000)\
         .execute()
     
     return jsonify(res.data)
@@ -330,45 +328,41 @@ def plays_view():
     res = safe_execute(supabase.table("transactions") \
         .select("*") \
         .eq("type", "play") \
-        .order("created_at", desc=True))
+        .order("created_at", desc=True) \
+        .limit(500))
 
+    plays = res.data
+    
+    # Collect all unique wallet IDs
+    wallet_ids = set()
+    for play in plays:
+        if play.get("from_wallet"):
+            wallet_ids.add(play["from_wallet"])
+        if play.get("to_wallet"):
+            wallet_ids.add(play["to_wallet"])
+    
+    # Bulk fetch all wallets in one query
+    wallet_map = {}
+    if wallet_ids:
+        wallets_res = safe_execute(supabase.table("wallets") \
+            .select("id, username, user_id") \
+            .in_("id", list(wallet_ids)))
+        wallet_map = {w["id"]: w for w in wallets_res.data}
+    
     # Enrich transactions with visitor usernames
     enriched_plays = []
-    for play in res.data:
-        # Get visitor username from wallet
-        if play.get("from_wallet"):
-            visitor_wallet_res = safe_execute(supabase.table("wallets") \
-                .select("username, user_id") \
-                .eq("id", play["from_wallet"]))
-            
-            if visitor_wallet_res.data:
-                visitor_info = visitor_wallet_res.data[0]
-                visitor_username = visitor_info.get("username", "Unknown User")
-                visitor_id = visitor_info.get("user_id")
-            else:
-                visitor_username = "Unknown User"
-                visitor_id = None
-        else:
-            visitor_username = "Unknown User"
-            visitor_id = None
-        
-        # Get stall information
-        if play.get("to_wallet"):
-            stall_wallet_res = safe_execute(supabase.table("wallets") \
-                .select("username") \
-                .eq("id", play["to_wallet"]))
-            
-            stall_username = stall_wallet_res.data[0]["username"] if stall_wallet_res.data else "Unknown Stall"
-        else:
-            stall_username = "Unknown Stall"
+    for play in plays:
+        visitor_wallet = wallet_map.get(play.get("from_wallet"))
+        stall_wallet = wallet_map.get(play.get("to_wallet"))
         
         enriched_play = {
             **play,
-            "visitor_username": visitor_username,
-            "visitor_id": visitor_id,
-            "stall_username": stall_username,
+            "visitor_username": visitor_wallet.get("username", "Unknown User") if visitor_wallet else "Unknown User",
+            "visitor_id": visitor_wallet.get("user_id") if visitor_wallet else None,
+            "stall_username": stall_wallet.get("username", "Unknown Stall") if stall_wallet else "Unknown Stall",
             "visitor_wallet_short": play.get("from_wallet", "")[:8] if play.get("from_wallet") else "Unknown"
         }
+         
         enriched_plays.append(enriched_play)
 
     return jsonify(enriched_plays), 200
@@ -472,105 +466,6 @@ def get_topup_image(image_path):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
-# @admin_bp.route("/topup-image/<path:image_path>", methods=["GET"])
-# @require_auth(["admin"])
-# def get_topup_image(image_path):
-#     """Get signed URL for topup request image from private bucket"""
-#     try:                
-#         # For private buckets, create a signed URL (temporary access)
-#         # This creates a URL that expires in 1 hour (3600 seconds)
-#         try:
-#             image_path = unquote(image_path)
-#             signed_url_response = safe_execute(supabase.storage.from_("payments").create_signed_url(
-#                 image_path, 
-#                 expires_in=3600  # 1 hour expiration
-#             ))
-            
-#             # Handle different response formats
-#             signed_url = None
-            
-#             if hasattr(signed_url_response, 'error') and signed_url_response.error:
-#                 return jsonify({"error": f"Failed to create signed URL: {signed_url_response.error}"}), 500
-            
-#             # Extract signed URL from response
-#             if isinstance(signed_url_response, dict):
-#                 if 'data' in signed_url_response and signed_url_response['data']:
-#                     signed_url = signed_url_response['data'].get('signedUrl')
-#                 elif 'signedUrl' in signed_url_response:
-#                     signed_url = signed_url_response['signedUrl']
-#             elif hasattr(signed_url_response, 'data') and signed_url_response.data:
-#                 if hasattr(signed_url_response.data, 'signedUrl'):
-#                     signed_url = signed_url_response.data.signedUrl
-#                 elif isinstance(signed_url_response.data, dict):
-#                     signed_url = signed_url_response.data.get('signedUrl')
-            
-#             if not signed_url:
-#                 return jsonify({"error": "Failed to extract signed URL from response"}), 500
-            
-#             # Validate the URL format
-#             if not signed_url.startswith(('http://', 'https://')):
-#                 return jsonify({"error": f"Invalid signed URL format: {signed_url}"}), 500
-            
-#             return jsonify({
-#                 "url": signed_url,
-#                 "expires_in": 3600,
-#                 "method": "signed_url"
-#             }), 200
-            
-#         except Exception as signed_url_error:
-#             # Fallback: Try to download the file and return it as base64
-#             try:
-#                 download_response = supabase.storage.from_("payments").download(image_path)
-                
-#                 if hasattr(download_response, 'error') and download_response.error:
-#                     return jsonify({"error": f"Download failed: {download_response.error}"}), 500
-                
-#                 # Get the blob data
-#                 blob_data = None
-#                 if hasattr(download_response, 'data') and download_response.data:
-#                     blob_data = download_response.data
-#                 elif isinstance(download_response, dict) and 'data' in download_response:
-#                     blob_data = download_response['data']
-                
-#                 if not blob_data:
-#                     return jsonify({"error": "No data received from download"}), 500
-                
-#                 # Convert blob to base64 for frontend display
-#                 import base64
-#                 if hasattr(blob_data, 'read'):
-#                     # If it's a file-like object
-#                     blob_bytes = blob_data.read()
-#                 else:
-#                     # If it's already bytes
-#                     blob_bytes = blob_data
-                
-#                 base64_data = base64.b64encode(blob_bytes).decode('utf-8')
-                
-#                 # Determine MIME type based on file extension
-#                 file_ext = image_path.lower().split('.')[-1]
-#                 mime_type = {
-#                     'jpg': 'image/jpeg',
-#                     'jpeg': 'image/jpeg',
-#                     'png': 'image/png',
-#                     'gif': 'image/gif',
-#                     'webp': 'image/webp'
-#                 }.get(file_ext, 'image/jpeg')
-                
-#                 data_url = f"data:{mime_type};base64,{base64_data}"
-                
-#                 return jsonify({
-#                     "url": data_url,
-#                     "method": "download_base64",
-#                     "size": len(blob_bytes)
-#                 }), 200
-                
-#             except Exception as download_error:
-#                 return jsonify({"error": f"Both signed URL and download methods failed. Signed URL error: {signed_url_error}. Download error: {download_error}"}), 500
-        
-#     except Exception as e:
-#         return jsonify({"error": f"Failed to get image: {str(e)}"}), 500
-
 
 @admin_bp.route("/storage-debug", methods=["GET"])
 @require_auth(["admin"])
@@ -703,7 +598,8 @@ def approve_topup(data):
 @require_auth(["admin"])
 def wallets():
     res = safe_execute(supabase.table("wallets") \
-        .select("id, user_id, username, balance, is_active, created_at"))
+        .select("id, user_id, username, balance, is_active, created_at") \
+        .limit(1000))
     return jsonify(res.data)
 
 
@@ -719,33 +615,56 @@ def transactions():
     """Get all transactions with topup image info where available"""
     res = safe_execute(supabase.table("transactions") \
         .select("*") \
-        .order("created_at", desc=True))
+        .order("created_at", desc=True) \
+        .limit(500))
     
-    # For topup transactions, add image info from topup_requests
+    transactions_data = res.data
+    
+    # Collect all wallet IDs for topup transactions
+    topup_wallet_ids = set()
+    for transaction in transactions_data:
+        if transaction.get("type") == "topup" and transaction.get("to_wallet"):
+            topup_wallet_ids.add(transaction["to_wallet"])
+    
+    # Bulk fetch topup requests for all topup transactions
+    topup_map = {}
+    if topup_wallet_ids:
+        topup_res = safe_execute(
+            supabase.table("topup_requests")
+            .select("wallet_id, amount, image_path, image_hash, created_at")
+            .in_("wallet_id", list(topup_wallet_ids))
+            .eq("status", "approved")
+            .order("created_at", desc=True)
+        )
+        
+        # Create map: wallet_id -> list of topup requests
+        for topup in topup_res.data:
+            key = topup["wallet_id"]
+            if key not in topup_map:
+                topup_map[key] = []
+            topup_map[key].append(topup)
+    
+    # Enhance transactions with topup image info
     enhanced_transactions = []
-    for transaction in res.data:
+    for transaction in transactions_data:
         enhanced_transaction = {**transaction}
         
-        # If it's a topup transaction, try to find the associated topup request
         if transaction.get("type") == "topup":
-            try:
-                topup_res = safe_execute(
-                    supabase.table("topup_requests")
-                    .select("image_path, image_hash")
-                    .eq("wallet_id", transaction["to_wallet"])
-                    .eq("amount", transaction["points_amount"])
-                    .eq("status", "approved")
-                    .order("created_at", desc=True)
-                    .limit(1)
-                )
-                
-                if topup_res.data:
-                    enhanced_transaction["topup_image_path"] = topup_res.data[0]["image_path"]
-                    enhanced_transaction["topup_image_hash"] = topup_res.data[0]["image_hash"]
-                    enhanced_transaction["has_topup_image"] = True
-                else:
-                    enhanced_transaction["has_topup_image"] = False
-            except:
+            wallet_id = transaction.get("to_wallet")
+            amount = transaction.get("points_amount")
+            
+            # Find matching topup request
+            topup_requests = topup_map.get(wallet_id, [])
+            matching_topup = next(
+                (t for t in topup_requests if t["amount"] == amount),
+                None
+            )
+            
+            if matching_topup:
+                enhanced_transaction["topup_image_path"] = matching_topup["image_path"]
+                enhanced_transaction["topup_image_hash"] = matching_topup["image_hash"]
+                enhanced_transaction["has_topup_image"] = True
+            else:
                 enhanced_transaction["has_topup_image"] = False
         else:
             enhanced_transaction["has_topup_image"] = False
@@ -758,101 +677,25 @@ def transactions():
 @admin_bp.route("/topup-image/<path:image_path>", methods=["GET"])
 @require_auth(["admin"])
 def get_topup_image(image_path):
-    """Get topup image using download method to bypass RLS issues"""
     try:
-        # Try to download the file directly (bypasses some RLS issues)
-        try:
-            download_response = supabase.storage.from_("payments").download(image_path)
-            
-            # Check if download was successful
-            if hasattr(download_response, 'error') and download_response.error:
-                return jsonify({
-                    "error": f"Download failed: {download_response.error}",
-                    "path": image_path
-                }), 500
-            
-            # Get the blob data
-            blob_data = None
-            if hasattr(download_response, 'data') and download_response.data:
-                blob_data = download_response.data
-            elif isinstance(download_response, dict) and 'data' in download_response:
-                blob_data = download_response['data']
-            else:
-                blob_data = download_response
-            
-            if not blob_data:
-                return jsonify({
-                    "error": "No data received from download",
-                    "path": image_path
-                }), 500
-            
-            # Convert blob to base64 for frontend display
-            import base64
-            if hasattr(blob_data, 'read'):
-                # If it's a file-like object
-                blob_bytes = blob_data.read()
-            else:
-                # If it's already bytes
-                blob_bytes = blob_data
-            
-            base64_data = base64.b64encode(blob_bytes).decode('utf-8')
-            
-            # Determine MIME type based on file extension
-            file_ext = image_path.lower().split('.')[-1]
-            mime_type = {
-                'jpg': 'image/jpeg',
-                'jpeg': 'image/jpeg',
-                'png': 'image/png',
-                'gif': 'image/gif',
-                'webp': 'image/webp'
-            }.get(file_ext, 'image/jpeg')
-            
-            data_url = f"data:{mime_type};base64,{base64_data}"
-            
-            return jsonify({
-                "url": data_url,
-                "method": "download_base64",
-                "size": len(blob_bytes),
-                "path_used": image_path
-            }), 200
-            
-        except Exception as download_error:
-            # Fallback: Try signed URL method
-            try:
-                signed_url_response = supabase.storage.from_("payments").create_signed_url(
-                    image_path, 
-                    expires_in=3600
-                )
-                
-                # Extract signed URL from response
-                signed_url = None
-                if hasattr(signed_url_response, 'data') and signed_url_response.data:
-                    if hasattr(signed_url_response.data, 'signedUrl'):
-                        signed_url = signed_url_response.data.signedUrl
-                    elif isinstance(signed_url_response.data, dict):
-                        signed_url = signed_url_response.data.get('signedUrl')
-                elif isinstance(signed_url_response, dict):
-                    signed_url = signed_url_response.get('signedUrl')
-                
-                if signed_url:
-                    return jsonify({
-                        "url": signed_url,
-                        "expires_in": 3600,
-                        "method": "signed_url_fallback",
-                        "path_used": image_path
-                    }), 200
-                
-            except Exception as signed_error:
-                pass
-            
-            return jsonify({
-                "error": f"Both download and signed URL methods failed. Download error: {download_error}",
-                "path": image_path
-            }), 500
-        
-    except Exception as e:
+        image_path = unquote(image_path)
+
+        signed = supabase.storage.from_("payments").create_signed_url(
+            image_path,
+            expires_in=3600
+        )
+
+        # Supabase Python client returns dict
+        signed_url = signed.get("signedURL") or signed.get("signedUrl")
+
+        if not signed_url:
+            return jsonify({"error": f"Signed URL failed: {signed}"}), 500
+
         return jsonify({
-            "error": f"Failed to get image: {str(e)}",
-            "image_path": image_path
-        }), 500
+            "url": signed_url,
+            "expires_in": 3600
+        }), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
