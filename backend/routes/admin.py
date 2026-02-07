@@ -45,11 +45,11 @@ admin_bp = Blueprint("admin", __name__)
 # -------- Swagger Schemas --------
 
 class CreateUserSchema(Schema):
-    username = fields.Str(required=True, metadata={"example": "visitor1"})
-    password = fields.Str(required=True, metadata={"example": "password123"})
-    name = fields.Str(required=True, metadata={"example": "Visitor One"})
-    role = fields.Str(metadata={"example": "visitor"})
-    price = fields.Int(metadata={"example": 10})
+    username = fields.Str(required=True)
+    password = fields.Str(required=True)
+    name = fields.Str(required=True)
+    role = fields.Str()
+    price = fields.Int()
 
 
 class CreateUserResponseSchema(Schema):
@@ -84,34 +84,51 @@ class TopupApproveSchema(Schema):
 
 @admin_bp.route("/create-user", methods=["POST"])
 @require_auth(["admin"])
-@admin_bp.arguments(CreateUserSchema)
-@admin_bp.response(200, CreateUserResponseSchema)
-def create_visitor(data):
+def create_visitor():
+    """
+    Docstring for create_visitor
+    """
+
+    data=request.json
+
     hashed = bcrypt.hashpw(
         data["password"].encode(),
         bcrypt.gensalt()
     ).decode()
 
-    result = safe_execute(
-        supabase.rpc("admin_create_user", {
-            "p_username": data["username"],
-            "p_password_hash": hashed,
-            "p_role": data.get("role", "visitor"),
-            "p_wallet_name": data.get("name", data["username"]),
-            "p_price_per_play": data.get("price")
-        })
-    )
+    user = supabase.table("users").insert({
+        "username": data["username"],
+        "reg_no": data["username"],
+        "password_hash": hashed,
+        "passwd" : data["password"],
+        "role": data.get("role", "visitor")
+    }).execute().data[0]
 
-    row = result.data[0]
+    wallet = supabase.table("wallets").insert({
+        "user_id": user["id"],
+        "username": data["name"],
+        "balance": 100 if user["role"] == "visitor" else (10000 if user["role"] == "admin" else 0)
+    }).execute().data[0]
+
+    if user["role"]=="stall":
+        stall = supabase.table("stalls").insert({        
+            "user_id": user["id"],
+            "stall_name": data["username"],
+            "wallet_id": wallet["id"],
+            "price_per_play": data["price"]
+        }).execute().data[0]
+        return jsonify({
+            "user_id": user["id"],
+            "user_name": user["username"],
+            "wallet_id": wallet["id"],
+            "stall_id": stall["id"]
+        })
 
     return jsonify({
-        "user_id": row["out_user_id"],
-        "user_name": row["out_user_name"],
-        "wallet_id": row["out_wallet_id"],
-        "stall_id": row["out_stall_id"]
+        "user_id": user["id"],
+        "user_name": user["username"],
+        "wallet_id": wallet["id"]
     })
-
-
 
 @admin_bp.route("/create-stall", methods=["POST"])
 @require_auth(["admin"])
@@ -126,25 +143,26 @@ def create_stall():
         bcrypt.gensalt()
     ).decode()
 
-    user = safe_execute(supabase.table("users").insert({
+    user = supabase.table("users").insert({
         "username": data["username"],
+        "reg_no": data["username"],
         "password_hash": hashed,
         "passwd" : data["password"],
         "role": "stall"
-    })).data[0]
+    }).execute().data[0]
 
-    wallet = safe_execute(supabase.table("wallets").insert({
+    wallet = supabase.table("wallets").insert({
         "user_id": user["id"],
         "username": data["username"],
         "balance": 0
-    })).data[0]
+    }).execute().data[0]
 
-    stall = safe_execute(supabase.table("stalls").insert({        
+    stall = supabase.table("stalls").insert({        
         "user_id": user["id"],
         "stall_name": data["username"],
         "wallet_id": wallet["id"],
         "price_per_play": data["price"]
-    })).data[0]
+    }).execute().data[0]
 
     return jsonify({"stall_id": stall["id"]})
 
@@ -155,99 +173,56 @@ def create_stall():
 @admin_bp.response(200)
 def bulk_users():
     """
-    Bulk create users with enhanced validation and error handling
+    Docstring for bulk_users
     """
-    inp = request.get_json()
-    
+
+    inp=request.get_json()
+    users=[]
     if not inp:
-        return jsonify({"error": "Empty request body"}), 400
-    
-    if not isinstance(inp, list):
-        return jsonify({"error": "Request body must be an array of user objects"}), 400
-    
-    if len(inp) == 0:
-        return jsonify({"error": "No users provided"}), 400
-    
-    created_users = []
-    errors = []
-    
-    for i, data in enumerate(inp):
-        try:
-            # Validate required fields
-            if not data.get("username") or not data.get("password") or not data.get("role"):
-                errors.append(f"User {i+1}: Missing required fields (username, password, role)")
-                continue
-            
-            # Validate role
-            if data["role"] not in ["visitor", "stall", "admin"]:
-                errors.append(f"User {i+1}: Invalid role '{data['role']}'. Must be visitor, stall, or admin")
-                continue
-            
-            # Check if username already exists
-            existing_user = safe_execute(supabase.table("users").select("username").eq("username", data["username"]))
-            if existing_user.data:
-                errors.append(f"User {i+1}: Username '{data['username']}' already exists")
-                continue
-            
-            # Hash password
-            hashed = bcrypt.hashpw(
-                data["password"].encode(),
-                bcrypt.gensalt()
-            ).decode()
+        return jsonify({"error" : "Empty Bulk-Users" }),400
+    for data in inp:
+        hashed = bcrypt.hashpw(
+            data["password"].encode(),
+            bcrypt.gensalt()
+        ).decode()
 
-            # Create user
-            user = safe_execute(supabase.table("users").insert({
-                "username": data["username"],
-                "password_hash": hashed,
-                "passwd": data["password"],
-                "role": data["role"]
-            })).data[0]
+        user = supabase.table("users").insert({
+            "username": data["username"],
+            "reg_no": data["username"],
+            "password_hash": hashed,
+            "passwd" : data["password"],
+            "role": data.get("role", "visitor")
+        }).execute().data[0]
 
-            # Create wallet with appropriate initial balance
-            initial_balance = 100 if user["role"] == "visitor" else (10000 if user["role"] == "admin" else 0)
-            wallet = safe_execute(supabase.table("wallets").insert({
+        wallet = supabase.table("wallets").insert({
+            "user_id": user["id"],
+            "user_name": data["name"],
+            "balance": 100 if user["role"] == "visitor" else (10000 if user["role"] == "admin" else 0)
+        }).execute().data[0]
+        if user["role"]=="stall":
+            stall = supabase.table("stalls").insert({        
                 "user_id": user["id"],
-                "username": data.get("name", data["username"]),  # Use name if provided, otherwise username
-                "balance": initial_balance
-            })).data[0]
-            
-            user_result = {
-                "user_id": user["id"],
-                "username": user["username"],
-                "role": user["role"],
+                "stall_name": data["username"],
                 "wallet_id": wallet["id"],
-                "initial_balance": initial_balance
-            }
-            
-            # Create stall if role is stall
-            if user["role"] == "stall":
-                price_per_play = data.get("price", 10)  # Default to 10 if not specified
-                stall = safe_execute(supabase.table("stalls").insert({        
-                    "user_id": user["id"],
-                    "stall_name": data["username"],
-                    "wallet_id": wallet["id"],
-                    "price_per_play": price_per_play
-                })).data[0]
-                user_result["stall_id"] = stall["id"]
-                user_result["price_per_play"] = price_per_play
-            
-            created_users.append(user_result)
-            
-        except Exception as e:
-            errors.append(f"User {i+1} ({data.get('username', 'unknown')}): {str(e)}")
-            continue
-    
-    # Return results
-    response = {
-        "success": len(created_users) > 0,
-        "created_count": len(created_users),
-        "error_count": len(errors),
-        "created_users": created_users,
-        "errors": errors
-    }
-    
-    status_code = 200 if len(created_users) > 0 else 400
-    return jsonify(response), status_code
+                "price_per_play": data["price"]
+            }).execute().data[0]
+            users.append({
+            "user_id": user["id"],
+            "user_name": user["username"],
+            "wallet_id": wallet["id"],
+            "user_password": user["passwd"],
+            "stall_id": stall["id"]
+            })
+
+        else:
+            users.append({
+            "user_id": user["id"],
+            "user_name": user["username"],
+            "wallet_id": wallet["id"],
+            "user_password": user["passwd"]
+            })
+        
+    return jsonify(users)
 
 @admin_bp.route("/users" , methods=["GET"])
 @require_auth(["admin"])
@@ -672,30 +647,4 @@ def transactions():
         enhanced_transactions.append(enhanced_transaction)
     
     return jsonify(enhanced_transactions)
-
-
-@admin_bp.route("/topup-image/<path:image_path>", methods=["GET"])
-@require_auth(["admin"])
-def get_topup_image(image_path):
-    try:
-        image_path = unquote(image_path)
-
-        signed = supabase.storage.from_("payments").create_signed_url(
-            image_path,
-            expires_in=3600
-        )
-
-        # Supabase Python client returns dict
-        signed_url = signed.get("signedURL") or signed.get("signedUrl")
-
-        if not signed_url:
-            return jsonify({"error": f"Signed URL failed: {signed}"}), 500
-
-        return jsonify({
-            "url": signed_url,
-            "expires_in": 3600
-        }), 200
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
 
