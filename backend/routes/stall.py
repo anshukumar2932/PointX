@@ -23,7 +23,13 @@ def safe_execute(query, retries=3, delay=1):
         try:
             return query.execute()
 
-        except httpx.RemoteProtocolError:
+        except (httpx.RemoteProtocolError, httpx.ConnectError) as e:
+            if attempt == retries - 1:
+                raise
+            time.sleep(delay)
+            delay *= 2 
+            
+        except httpx.TimeoutException:
             if attempt == retries - 1:
                 raise
             time.sleep(delay)

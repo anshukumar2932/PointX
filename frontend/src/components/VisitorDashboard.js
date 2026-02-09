@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import api from "../api/axios";
 import QRGenerator from "./QRGenerator";
 import { useAuth } from "../context/AuthContext";
+import MessageAlert from "./MessageAlert";
 
 const VisitorDashboard = () => {
   const { user: authUser, refreshUser } = useAuth();
@@ -11,6 +12,7 @@ const VisitorDashboard = () => {
   const [history, setHistory] = useState([]);
   const [leaderboard, setLeaderboard] = useState([]);
   const [message, setMessage] = useState("");
+  const [messageType, setMessageType] = useState("info");
   const [topupAmount, setTopupAmount] = useState(50);
   const [topupImage, setTopupImage] = useState(null);
   const [topupLoading, setTopupLoading] = useState(false);
@@ -43,12 +45,14 @@ const VisitorDashboard = () => {
     try {
       const res = await api.get("/auth/me");
       setMe(res.data);
-      setMessage(""); // Clear any previous error messages
+      setMessage("");
+      setMessageType("info");
       
       // Also update the auth context with complete user data
       await refreshUser();
     } catch (error) {
       setMessage("Failed to load user session. Please try logging in again.");
+      setMessageType("error");
     } finally {
       setUserLoading(false);
     }
@@ -60,6 +64,7 @@ const VisitorDashboard = () => {
       setWallet(res.data);
     } catch {
       setMessage("Failed to load wallet");
+      setMessageType("error");
     }
   };
 
@@ -87,11 +92,13 @@ const VisitorDashboard = () => {
     e.preventDefault();
     if (!topupImage || !topupAmount) {
       setMessage("Please select an image and enter amount");
+      setMessageType("warning");
       return;
     }
 
     setTopupLoading(true);
     setMessage("Submitting topup request...");
+    setMessageType("loading");
 
     try {
       const formData = new FormData();
@@ -105,6 +112,7 @@ const VisitorDashboard = () => {
       });
 
       setMessage("Topup request submitted successfully! Admin will review within 24 hours.");
+      setMessageType("success");
       setTopupImage(null);
       setTopupAmount(50);
       
@@ -129,7 +137,8 @@ const VisitorDashboard = () => {
         errorMsg = err.message || "Unknown error occurred";
       }
       
-      setMessage(`Error: ${errorMsg}`);
+      setMessage(errorMsg);
+      setMessageType("error");
     } finally {
       setTopupLoading(false);
     }
@@ -191,7 +200,7 @@ const VisitorDashboard = () => {
         ))}
       </div>
 
-      {message && <div className="error">{message}</div>}
+      {message && <MessageAlert message={message} type={messageType} onClose={() => setMessage("")} />}
 
       {/* ================= WALLET ================= */}
       {activeTab === "wallet" && (

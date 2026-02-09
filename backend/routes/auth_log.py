@@ -11,6 +11,9 @@ from flask_smorest import Blueprint
 from marshmallow import Schema, fields
 import bcrypt
 import os
+import time
+import httpx
+from postgrest.exceptions import APIError
 
 from supabase_client import supabase
 from auth import require_auth, generate_token
@@ -26,6 +29,25 @@ GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 # Pattern: looks for anything after the first dot and before the @
 VIT_EMAIL_REGEX = r"^[a-zA-Z]+\.([a-zA-Z0-9]+)@vitbhopal\.ac\.in$"
 
+def safe_execute(query, retries=3, delay=1):
+    for attempt in range(retries):
+        try:
+            return query.execute()
+
+        except (httpx.RemoteProtocolError, httpx.ConnectError) as e:
+            if attempt == retries - 1:
+                raise
+            time.sleep(delay)
+            delay *= 2 
+            
+        except httpx.TimeoutException:
+            if attempt == retries - 1:
+                raise
+            time.sleep(delay)
+            delay *= 2
+
+        except APIError:
+            raise
 
 auth_bp = Blueprint(
     "auth",
@@ -78,16 +100,18 @@ def login(data):
             extra={"username": data.get("username")}
         )
 
-        res = (
+        res = safe_execute(
             supabase
             .table("users")
             .select("id, username, password_hash, role")
             .eq("username", data["username"])
-            .execute()
         )
 
         current_app.logger.debug("SUPABASE RESPONSE: %s", res.data)
 
+    except (httpx.ConnectError, httpx.RemoteProtocolError) as e:
+        current_app.logger.exception("NETWORK ERROR during login")
+        return jsonify({"error": "Network error. Please check your connection and try again."}), 503
     except Exception:
         current_app.logger.exception("DATABASE ERROR during login")
         return jsonify({"error": "Database error"}), 500
@@ -174,12 +198,16 @@ def google_login():
 
         # 3. Database Sync Logic - Case insensitive search
         # Search by reg_no (since that's your unique internal identifier)
-        res = supabase.table("users").select("*").eq("reg_no", reg_no).execute()
+        res = safe_execute(
+            supabase.table("users").select("*").eq("reg_no", reg_no)
+        )
         
         # If not found, try case-insensitive search
         if not res.data:
             current_app.logger.info(f"Exact match not found, trying case-insensitive search for: {reg_no}")
-            res = supabase.table("users").select("*").ilike("reg_no", reg_no).execute()
+            res = safe_execute(
+                supabase.table("users").select("*").ilike("reg_no", reg_no)
+            )
             if res.data:
                 current_app.logger.info(f"Found user with case-insensitive match: {res.data[0].get('reg_no')}")
 
@@ -193,7 +221,9 @@ def google_login():
 
         # 4. Link Google Sub if missing
         if not user.get("google_sub"):
-            supabase.table("users").update({"google_sub": google_sub}).eq("id", user["id"]).execute()
+            safe_execute(
+                supabase.table("users").update({"google_sub": google_sub}).eq("id", user["id"])
+            )
             current_app.logger.info(f"Linked Google account for user: {reg_no}")
 
         # 5. Generate PointX Token
@@ -205,5 +235,11 @@ def google_login():
             "reg_no": reg_no
         }), 200
 
+    except (httpx.ConnectError, httpx.RemoteProtocolError) as e:
+        current_app.logger.exception("NETWORK ERROR during Google login")
+        return jsonify({"error": "Network error. Please check your connection and try again."}), 503
     except ValueError:
         return jsonify({"error": "Invalid Google token"}), 400
+    except Exception as e:
+        current_app.logger.exception("ERROR during Google login")
+        return jsonify({"error": "Authentication failed. Please try again."}), 500

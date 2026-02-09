@@ -15,12 +15,14 @@ import React, { useState, useEffect } from "react";
 import api from "../api/axios";
 import QRScanner from "./QRScanner";
 import QRDebugger from "./QRDebugger";
+import MessageAlert from "./MessageAlert";
 
 const StallDashboard = () => {
   const [activeTab, setActiveTab] = useState("scanner");
   const [scanning, setScanning] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+  const [messageType, setMessageType] = useState("info");
 
   const [currentPlay, setCurrentPlay] = useState(null);
   const [score, setScore] = useState("");
@@ -89,6 +91,7 @@ const StallDashboard = () => {
       setWallet(res.data);
     } catch (error) {
       setMessage("Failed to load wallet information");
+      setMessageType("error");
     }
   };
 
@@ -98,6 +101,7 @@ const StallDashboard = () => {
       setPlays(res.data || []);
     } catch (error) {
       setMessage("Failed to load play history");
+      setMessageType("error");
     }
   };
 
@@ -116,12 +120,14 @@ const StallDashboard = () => {
     // Validate QR data structure
     if (!qrData || typeof qrData !== 'object') {
       setMessage("Invalid QR code format");
+      setMessageType("error");
       return;
     }
 
     // Check if it's a visitor QR code
     if (qrData.type !== 'visitor') {
       setMessage("This QR code is not for a visitor");
+      setMessageType("warning");
       return;
     }
 
@@ -130,16 +136,19 @@ const StallDashboard = () => {
     
     if (!walletId) {
       setMessage("Invalid visitor QR code - missing wallet ID");
+      setMessageType("error");
       return;
     }
 
     if (loading || currentPlay) {
       setMessage("Game already in progress");
+      setMessageType("warning");
       return;
     }
 
     setLoading(true);
     setMessage("Checking visitor balance...");
+    setMessageType("loading");
 
     try {
       // First, get visitor's current balance
@@ -148,11 +157,13 @@ const StallDashboard = () => {
       
       if (!visitorData.is_active) {
         setMessage("Error: Visitor wallet is frozen");
+        setMessageType("error");
         setLoading(false);
         return;
       }
 
       setMessage(`Visitor: ${qrData.username || visitorData.username} | Balance: ${visitorData.balance} pts | Starting game...`);
+      setMessageType("info");
 
       const res = await api.post("/stall/play", {
         visitor_wallet: walletId,
@@ -171,6 +182,7 @@ const StallDashboard = () => {
       }, 200);
 
       setMessage(`Game started for ${qrData.username || visitorData.username} (Balance: ${visitorData.balance} pts)`);
+      setMessageType("success");
     } catch (err) {
       let errorMsg = "Failed to fetch visitor balance";
       
@@ -185,7 +197,8 @@ const StallDashboard = () => {
         errorMsg = err.message || "Unknown error occurred";
       }
       
-      setMessage(`Error: ${errorMsg}`);
+      setMessage(errorMsg);
+      setMessageType("error");
     }
 
     setLoading(false);
@@ -207,6 +220,7 @@ const StallDashboard = () => {
       });
 
       setMessage("Score submitted successfully! Game completed.");
+      setMessageType("success");
       setCurrentPlay(null);
       setSelectedPendingGame(null);
       setScore("");
@@ -215,13 +229,15 @@ const StallDashboard = () => {
       setTimeout(() => {
         setActiveTab("scanner");
         setMessage("Ready for next game");
+        setMessageType("info");
       }, 3000);
       
       loadHistory();
       loadPendingGames();
       loadWallet();
     } catch (err) {
-      setMessage(err.response?.data?.error || "Score failed");
+      setMessage(err.response?.data?.error || "Score submission failed");
+      setMessageType("error");
     }
 
     setLoading(false);
@@ -233,6 +249,7 @@ const StallDashboard = () => {
     setScore("");
     setActiveTab("score");
     setMessage(`Selected pending game for ${game.visitor_username}`);
+    setMessageType("info");
   };
 
   // Memoize expensive operations
@@ -265,9 +282,11 @@ const StallDashboard = () => {
       </div>
 
       {message && (
-        <div className="alert-message mb-md">
-          {message}
-        </div>
+        <MessageAlert 
+          message={message} 
+          type={messageType} 
+          onClose={() => setMessage("")} 
+        />
       )}
 
       {/* -------- SCANNER -------- */}
@@ -297,7 +316,8 @@ const StallDashboard = () => {
                 isActive={true}
                 onScan={handleQRScan}
                 onError={(e) => {
-                  setMessage(`❌ Scanner Error: ${e.message}`);
+                  setMessage(`Scanner Error: ${e.message}`);
+                  setMessageType("error");
                   if (e.message.includes("Camera permission")) {
                     setScanning(false);
                   }

@@ -1531,6 +1531,18 @@ html {
   scroll-behavior: smooth;
 }
 
+/* Message alert animation */
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 /* Better focus management for mobile */
 @media (max-width: 767px) {
   .input:focus {

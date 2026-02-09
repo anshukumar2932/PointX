@@ -30,7 +30,13 @@ def safe_execute(query, retries=3, delay=1):
         try:
             return query.execute()
 
-        except httpx.RemoteProtocolError:
+        except (httpx.RemoteProtocolError, httpx.ConnectError) as e:
+            if attempt == retries - 1:
+                raise
+            time.sleep(delay)
+            delay *= 2 
+            
+        except httpx.TimeoutException:
             if attempt == retries - 1:
                 raise
             time.sleep(delay)
@@ -96,27 +102,33 @@ def create_visitor():
         bcrypt.gensalt()
     ).decode()
 
-    user = supabase.table("users").insert({
-        "username": data["username"],
-        "reg_no": data["username"],
-        "password_hash": hashed,
-        "passwd" : data["password"],
-        "role": data.get("role", "visitor")
-    }).execute().data[0]
+    user = safe_execute(
+        supabase.table("users").insert({
+            "username": data["username"],
+            "reg_no": data["username"],
+            "password_hash": hashed,
+            "passwd" : data["password"],
+            "role": data.get("role", "visitor")
+        })
+    ).data[0]
 
-    wallet = supabase.table("wallets").insert({
-        "user_id": user["id"],
-        "username": data["name"],
-        "balance": 100 if user["role"] == "visitor" else (10000 if user["role"] == "admin" else 0)
-    }).execute().data[0]
+    wallet = safe_execute(
+        supabase.table("wallets").insert({
+            "user_id": user["id"],
+            "username": data["name"],
+            "balance": 100 if user["role"] == "visitor" else (10000 if user["role"] == "admin" else 0)
+        })
+    ).data[0]
 
     if user["role"]=="stall":
-        stall = supabase.table("stalls").insert({        
-            "user_id": user["id"],
+        stall = safe_execute(
+            supabase.table("stalls").insert({        
+                "user_id": user["id"],
             "stall_name": data["username"],
             "wallet_id": wallet["id"],
             "price_per_play": data["price"]
-        }).execute().data[0]
+        })
+        ).data[0]
         return jsonify({
             "user_id": user["id"],
             "user_name": user["username"],
@@ -143,26 +155,32 @@ def create_stall():
         bcrypt.gensalt()
     ).decode()
 
-    user = supabase.table("users").insert({
-        "username": data["username"],
-        "reg_no": data["username"],
-        "password_hash": hashed,
-        "passwd" : data["password"],
-        "role": "stall"
-    }).execute().data[0]
+    user = safe_execute(
+        supabase.table("users").insert({
+            "username": data["username"],
+            "reg_no": data["username"],
+            "password_hash": hashed,
+            "passwd" : data["password"],
+            "role": "stall"
+        })
+    ).data[0]
 
-    wallet = supabase.table("wallets").insert({
+    wallet = safe_execute(
+        supabase.table("wallets").insert({
         "user_id": user["id"],
         "username": data["username"],
         "balance": 0
-    }).execute().data[0]
+    })
+    ).data[0]
 
-    stall = supabase.table("stalls").insert({        
+    stall = safe_execute(
+        supabase.table("stalls").insert({        
         "user_id": user["id"],
         "stall_name": data["username"],
         "wallet_id": wallet["id"],
         "price_per_play": data["price"]
-    }).execute().data[0]
+    })
+    ).data[0]
 
     return jsonify({"stall_id": stall["id"]})
 
@@ -186,26 +204,32 @@ def bulk_users():
             bcrypt.gensalt()
         ).decode()
 
-        user = supabase.table("users").insert({
-            "username": data["username"],
-            "reg_no": data["username"],
-            "password_hash": hashed,
-            "passwd" : data["password"],
-            "role": data.get("role", "visitor")
-        }).execute().data[0]
+        user = safe_execute(
+            supabase.table("users").insert({
+                "username": data["username"],
+                "reg_no": data["username"],
+                "password_hash": hashed,
+                "passwd" : data["password"],
+                "role": data.get("role", "visitor")
+            })
+        ).data[0]
 
-        wallet = supabase.table("wallets").insert({
-            "user_id": user["id"],
-            "user_name": data["name"],
-            "balance": 100 if user["role"] == "visitor" else (10000 if user["role"] == "admin" else 0)
-        }).execute().data[0]
+        wallet = safe_execute(
+            supabase.table("wallets").insert({
+                "user_id": user["id"],
+                "user_name": data["name"],
+                "balance": 100 if user["role"] == "visitor" else (10000 if user["role"] == "admin" else 0)
+            })
+        ).data[0]
         if user["role"]=="stall":
-            stall = supabase.table("stalls").insert({        
+            stall = safe_execute(
+                supabase.table("stalls").insert({        
                 "user_id": user["id"],
                 "stall_name": data["username"],
                 "wallet_id": wallet["id"],
                 "price_per_play": data["price"]
-            }).execute().data[0]
+            })
+            ).data[0]
             users.append({
             "user_id": user["id"],
             "user_name": user["username"],

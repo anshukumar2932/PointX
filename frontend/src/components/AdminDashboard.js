@@ -3,6 +3,7 @@ import Papa from "papaparse";
 import { Html5QrcodeScanner } from "html5-qrcode";
 import QRDebugger from "./QRDebugger";
 import api from "../api/axios";
+import MessageAlert from "./MessageAlert";
 
 import {
   createUser,
@@ -22,6 +23,10 @@ const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState("overview");
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+
+  // Message state
+  const [message, setMessage] = useState("");
+  const [messageType, setMessageType] = useState("info");
 
   // State for image preview modal
   const [previewImage, setPreviewImage] = useState(null);
@@ -145,7 +150,8 @@ const AdminDashboard = () => {
         data: loadedData
       };
     } catch (err) {
-      alert("Failed to load data.");
+      setMessage("Failed to load data.");
+      setMessageType("error");
     } finally {
       setLoading(false);
     }
@@ -163,7 +169,10 @@ const AdminDashboard = () => {
     setActionLoading(true);
     try {
       await actionFn();
-      alert(successMessage);
+      setMessage(successMessage);
+      setMessageType("success");
+      // Auto-hide success message after 5 seconds
+      setTimeout(() => setMessage(""), 5000);
       // Clear cache for current tab to force refresh
       if (cacheRef.current[activeTab]) {
         delete cacheRef.current[activeTab];
@@ -175,7 +184,8 @@ const AdminDashboard = () => {
         err?.response?.data?.message ||
         err.message ||
         "Operation failed";
-      alert(`Error: ${msg}`);
+      setMessage(msg);
+      setMessageType("error");
     } finally {
       setActionLoading(false);
     }
@@ -218,7 +228,8 @@ const AdminDashboard = () => {
             }
 
             if (!parsed || !parsed.user_id || !parsed.reg_no) {
-              alert("Invalid QR format.\nExpected: JSON or user_id:reg-no");
+              setMessage("Invalid QR format. Expected: JSON or user_id:reg-no");
+              setMessageType("error");
               return;
             }
 
@@ -286,7 +297,8 @@ const AdminDashboard = () => {
 
   const handlePreviewImage = async (imagePath) => {
     if (!imagePath) {
-      alert("No image available for this request");
+      setMessage("No image available for this request");
+      setMessageType("warning");
       return;
     }
 
@@ -581,6 +593,14 @@ const AdminDashboard = () => {
           </button>
         ))}
       </div>
+
+      {message && (
+        <MessageAlert 
+          message={message} 
+          type={messageType} 
+          onClose={() => setMessage("")} 
+        />
+      )}
 
       {isBusy && <div className="loading">Processing...</div>}
 
