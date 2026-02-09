@@ -331,11 +331,7 @@ const StallDashboard = () => {
               <p className="empty-description">All games have been completed.</p>
             </div>
           ) : (
-            <>
-              <div className="warning-box mb-md">
-                <p>⚠️ These games were started but scores were never submitted. Click "Submit Score" to complete them.</p>
-              </div>
-              
+            <>              
               <div className="table-container">
                 <table className="table">
                   <thead>

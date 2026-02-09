@@ -4,7 +4,7 @@ const baseURL = process.env.REACT_APP_API_BASE_URL || "http://localhost:5000/api
 
 const api = axios.create({
   baseURL: baseURL,
-  timeout: 70000,
+  timeout: 210000,
 });
 
 // Attach JWT automatically

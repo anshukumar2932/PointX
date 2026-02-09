@@ -12,3 +12,4 @@ PyJWT
 qrcode[pil]
 pillow
 gunicorn
+google-auth

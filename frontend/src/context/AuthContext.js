@@ -45,7 +45,7 @@ useEffect(() => {
     try {
       const response = await api.post('/auth/login', {
         username: username.trim(),
-        password: password
+        password: password.trim()
       });
 
       const { token, role } = response.data;
@@ -103,9 +103,40 @@ useEffect(() => {
     }
   };
 
+  const loginWithGoogle = async (googleToken) => {
+    try {
+      const response = await api.post('/auth/google', { token: googleToken });
+      const { token, role } = response.data;
+      
+      localStorage.setItem('token', token);
+      api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      
+      // Fetch full user data (same logic as your standard login)
+      try {
+        const userResponse = await api.get('/auth/me');
+        const userData = userResponse.data;
+        localStorage.setItem('user', JSON.stringify(userData));
+        setUser(userData);
+        return { success: true };
+      } catch (userError) {
+        // Fallback to basic user data if /me fails
+        const userData = { role };
+        localStorage.setItem('user', JSON.stringify(userData));
+        setUser(userData);
+        return { success: true };
+      }
+    } catch (error) {
+      return { 
+        success: false, 
+        error: error.response?.data?.error || 'Google Login failed' 
+      };
+    }
+  };
+
   const value = {
     user,
     login,
+    loginWithGoogle,
     logout,
     refreshUser,
     loading

@@ -20,29 +20,53 @@ function AppContent() {
     );
   }
 
-  if (!user) {
-    return <Login />;
-  }
-
   return (
-    <div className="container">
-      <Navigation />
-      <Routes>
-        <Route path="/" element={<Navigate to={`/${user.role}`} replace />} />
-        <Route 
-          path="/admin" 
-          element={user.role === 'admin' ? <AdminDashboard /> : <Navigate to={`/${user.role}`} />} 
-        />
-        <Route 
-          path="/stall" 
-          element={user.role === 'stall' ? <StallDashboard /> : <Navigate to={`/${user.role}`} />} 
-        />
-        <Route 
-          path="/visitor" 
-          element={user.role === 'visitor' ? <VisitorDashboard /> : <Navigate to={`/${user.role}`} />} 
-        />
-      </Routes>
-    </div>
+    <Routes>
+      <Route 
+        path="/" 
+        element={!user ? <Login /> : <Navigate to={`/${user.role}`} replace />} 
+      />
+      <Route 
+        path="/login" 
+        element={!user ? <Login /> : <Navigate to={`/${user.role}`} replace />} 
+      />
+      <Route 
+        path="/admin" 
+        element={
+          !user ? <Navigate to="/login" replace /> :
+          user.role === 'admin' ? (
+            <div className="container">
+              <Navigation />
+              <AdminDashboard />
+            </div>
+          ) : <Navigate to={`/${user.role}`} replace />
+        } 
+      />
+      <Route 
+        path="/stall" 
+        element={
+          !user ? <Navigate to="/login" replace /> :
+          user.role === 'stall' ? (
+            <div className="container">
+              <Navigation />
+              <StallDashboard />
+            </div>
+          ) : <Navigate to={`/${user.role}`} replace />
+        } 
+      />
+      <Route 
+        path="/visitor" 
+        element={
+          !user ? <Navigate to="/login" replace /> :
+          user.role === 'visitor' ? (
+            <div className="container">
+              <Navigation />
+              <VisitorDashboard />
+            </div>
+          ) : <Navigate to={`/${user.role}`} replace />
+        } 
+      />
+    </Routes>
   );
 }
 
