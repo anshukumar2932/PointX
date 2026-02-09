@@ -38,6 +38,7 @@ const Login = () => {
         auto_select: false,
         cancel_on_tap_outside: false,
         ux_mode: "popup",
+        timeout: 210000,
       });
 
       // eslint-disable-next-line no-undef
