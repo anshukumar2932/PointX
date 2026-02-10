@@ -2,28 +2,29 @@
 
 Flask-based REST API server for the PointX QR-based Point Management System.
 
-## 🎯 Overview
+## Overview
 
 The PointX backend provides a comprehensive REST API for managing users, wallets, transactions, and game operations. Built with Flask and Supabase, it supports multi-role authentication and real-time data processing.
 
-## 🚀 Features
+## Features
 
 ### Core Functionality
-- **🔐 JWT Authentication**: Secure token-based authentication with role-based access
-- **👥 Multi-Role System**: Admin, Stall, and Visitor roles with specific permissions
-- **💰 Wallet Management**: Real-time balance tracking and transaction processing
-- **🎮 Game Operations**: QR-based game initiation and score submission
-- **📊 Analytics**: Comprehensive reporting and leaderboard systems
-- **📱 Cross-Platform**: CORS-enabled for web and mobile clients
+- **JWT Authentication**: Secure token-based authentication with role-based access
+- **Multi-Role System**: Admin, Stall, and Visitor roles with specific permissions
+- **Wallet Management**: Real-time balance tracking and transaction processing
+- **Game Operations**: QR-based game initiation and score submission
+- **Analytics**: Comprehensive reporting and leaderboard systems
+- **Cross-Platform**: CORS-enabled for web and mobile clients
 
-### New Features (v1.2.0)
-- **📋 Enhanced Bulk User Creation**: CSV upload with advanced validation
-- **🔍 Duplicate Detection**: Username uniqueness checking
-- **⚡ Batch Processing**: Handle up to 100 users per operation
-- **📈 Detailed Error Reporting**: Comprehensive validation feedback
-- **🛡️ Enhanced Security**: Improved input validation and sanitization
+### New Features (v2.0.0)
+- **Enhanced Bulk User Creation**: CSV upload with advanced validation
+- **Duplicate Detection**: Username uniqueness checking
+- **Batch Processing**: Handle up to 100 users per operation
+- **Detailed Error Reporting**: Comprehensive validation feedback
+- **Enhanced Security**: Improved input validation and sanitization
+- **Google OAuth Integration**: Login with Google authentication
 
-## 🏗️ Architecture
+## Architecture
 
 ```
 backend/
@@ -43,7 +44,7 @@ backend/
     └── pointx.log
 ```
 
-## 🔧 Installation & Setup
+## Installation & Setup
 
 ### Prerequisites
 - Python 3.8 or higher
@@ -81,7 +82,7 @@ backend/
 
 The API will be available at `http://localhost:5000`
 
-## 🌐 Production Deployment
+## Production Deployment
 
 ### Render Deployment (Recommended)
 
@@ -97,7 +98,7 @@ The API will be available at `http://localhost:5000`
 - **Heroku**: Add `Procfile` with `web: gunicorn wsgi:app`
 - **DigitalOcean App Platform**: Configure with `backend` as source directory
 
-## ⚙️ Configuration
+## Configuration
 
 ### Environment Variables
 
@@ -131,7 +132,7 @@ PORT=5000
 - `FLASK_ENV`: Environment mode (development/production)
 - `PORT`: Server port (default: 5000)
 
-## 📡 API Endpoints
+## API Endpoints
 
 ### Authentication
 ```
@@ -144,7 +145,7 @@ POST /api/auth/logout         # User logout
 # User Management
 GET  /api/admin/users         # Get all users
 POST /api/admin/create-user   # Create single user
-POST /api/admin/bulk-users    # Bulk create users (NEW)
+POST /api/admin/bulk-users    # Bulk create users
 POST /api/admin/create-stall  # Create stall user
 
 # Wallet Management
@@ -189,7 +190,7 @@ GET /api/docs                # API documentation
 GET /api/openapi.json        # OpenAPI specification
 ```
 
-## 🔒 Authentication & Authorization
+## Authentication & Authorization
 
 ### JWT Token System
 - **Login**: Returns JWT token valid for 24 hours
@@ -201,7 +202,7 @@ GET /api/openapi.json        # OpenAPI specification
 - **Stall**: Game operations, score submission, stall management
 - **Visitor**: Personal wallet, game history, leaderboard access
 
-## 📋 Enhanced Bulk User Creation
+## Enhanced Bulk User Creation
 
 ### New Bulk Upload Features
 - **CSV Validation**: Comprehensive data validation before processing
@@ -241,7 +242,7 @@ POST /api/admin/bulk-users
 }
 ```
 
-## 🗄️ Database Schema
+## Database Schema
 
 ### Key Tables (Supabase)
 - **users**: User accounts and authentication
@@ -255,7 +256,7 @@ POST /api/admin/bulk-users
 - `approve_topup_request`: Process top-up approvals
 - `visitor_leaderboard`: Generate leaderboard rankings
 
-## 🔍 API Documentation
+## API Documentation
 
 ### Interactive Documentation
 - **Swagger UI**: Available at `/api/docs` when server is running
@@ -271,7 +272,7 @@ All API responses follow consistent JSON format:
 }
 ```
 
-## 🛠️ Development
+## Development
 
 ### Running Tests
 ```bash
@@ -302,7 +303,7 @@ mypy .
 - **Production**: File logging to `logs/pointx.log`
 - **Log Rotation**: Automatic log file rotation
 
-## 🚨 Troubleshooting
+## Troubleshooting
 
 ### Common Issues
 
@@ -333,7 +334,7 @@ export FLASK_DEBUG=1
 python app.py
 ```
 
-## 📊 Monitoring & Analytics
+## Monitoring & Analytics
 
 ### Health Monitoring
 - **Health Endpoint**: `/api/health` for uptime monitoring
@@ -345,13 +346,43 @@ python app.py
 - **Database Queries**: Query optimization and monitoring
 - **User Activity**: Authentication and usage patterns
 
-## 🔄 Version History
+## Version History
 
-- **v1.2.0**: Enhanced bulk user creation with CSV validation
-- **v1.1.0**: Added Flutter mobile app support
-- **v1.0.0**: Initial release with core functionality
+### v2.0.0 (February 10, 2026) - Latest
+- Added Club House Theme
+- Google Authentication integration
+- Performance improvements and timeout optimizations
+- Bug fixes for login and error handling
 
-## 🤝 Contributing
+### v1.5.0 (January 28-29, 2026)
+- Performance optimization for route fetching
+- Query-related bug fixes
+- Admin dashboard speed improvements
+
+### v1.4.0 (January 25-27, 2026)
+- UI improvements
+- QR code issue resolutions
+- Timeout adjustments
+- Authentication interceptor simplification
+
+### v1.3.0 (January 24, 2026)
+- Production deployment configuration
+- CORS fixes for production
+- Environment variable setup
+
+### v1.2.0 (January 23, 2026)
+- Enhanced bulk user creation with CSV validation
+- Frontend integration improvements
+
+### v1.1.0 (January 18-23, 2026)
+- Core features implementation
+- Backend API development
+- Supabase integration
+
+### v1.0.0 (January 18, 2026)
+- Initial release
+
+## Contributing
 
 1. Fork the repository
 2. Create a feature branch
@@ -360,7 +391,7 @@ python app.py
 5. Update documentation
 6. Submit a pull request
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License.
 

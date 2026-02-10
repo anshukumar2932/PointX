@@ -2,42 +2,43 @@
 
 React-based web application for PointX QR-based Point Management System, providing comprehensive admin, stall, and visitor interfaces.
 
-## 🎯 Overview
+## Overview
 
 The PointX frontend is a modern React application that delivers a responsive web experience for event management. It features role-based dashboards, real-time QR code operations, and comprehensive analytics tools.
 
-## ✨ Features
+## Features
 
-### 🔴 Admin Dashboard
-- **📊 System Overview**: Real-time statistics, user metrics, and activity monitoring
-- **👥 User Management**: Create, search, filter, and manage all system users
-- **📋 Enhanced Bulk User Creation**: CSV upload with advanced validation and error reporting
-- **💳 Wallet Management**: Monitor balances, perform top-ups, freeze/unfreeze wallets
-- **🎯 Attendance Tracking**: QR-based attendance with camera scanning and manual entry
-- **📈 Analytics**: Comprehensive reporting, leaderboards, and play statistics
-- **🔍 Transaction History**: Complete audit trail of all system operations
-- **🖼️ Payment Verification**: Image preview for top-up request approvals
+### Admin Dashboard
+- **System Overview**: Real-time statistics, user metrics, and activity monitoring
+- **User Management**: Create, search, filter, and manage all system users
+- **Enhanced Bulk User Creation**: CSV upload with advanced validation and error reporting
+- **Wallet Management**: Monitor balances, perform top-ups, freeze/unfreeze wallets
+- **Attendance Tracking**: QR-based attendance with camera scanning and manual entry
+- **Analytics**: Comprehensive reporting, leaderboards, and play statistics
+- **Transaction History**: Complete audit trail of all system operations
+- **Payment Verification**: Image preview for top-up request approvals
 
-### 🔵 Stall Dashboard
-- **📱 QR Scanner**: Real-time camera scanning of visitor QR codes
-- **🎮 Game Operations**: Start games, submit scores, manage player sessions
-- **📊 Play History**: Transaction history and earnings tracking
-- **💰 Wallet Monitoring**: Real-time balance and transaction details
-- **📈 Performance Analytics**: Stall-specific metrics and statistics
+### Stall Dashboard
+- **QR Scanner**: Real-time camera scanning of visitor QR codes
+- **Game Operations**: Start games, submit scores, manage player sessions
+- **Play History**: Transaction history and earnings tracking
+- **Wallet Monitoring**: Real-time balance and transaction details
+- **Performance Analytics**: Stall-specific metrics and statistics
 
-### 🟢 Visitor Dashboard
-- **🎫 Personal QR Code**: Unique QR code generation for game participation
-- **💰 Wallet Management**: Balance tracking and transaction history
-- **🏆 Leaderboards**: Score comparisons and ranking systems
-- **🎮 Game History**: Complete play history and achievement tracking
+### Visitor Dashboard
+- **Personal QR Code**: Unique QR code generation for game participation
+- **Wallet Management**: Balance tracking and transaction history
+- **Leaderboards**: Score comparisons and ranking systems
+- **Game History**: Complete play history and achievement tracking
 
-### 🛠️ Additional Features
-- **🔍 QR Code Debugging**: Advanced QR testing and validation tools
-- **📱 Responsive Design**: Optimized for desktop, tablet, and mobile devices
-- **🔄 Real-Time Updates**: Live data synchronization with backend
-- **🎨 Modern UI**: Clean, intuitive interface with consistent design system
+### Additional Features
+- **QR Code Debugging**: Advanced QR testing and validation tools
+- **Responsive Design**: Optimized for desktop, tablet, and mobile devices
+- **Real-Time Updates**: Live data synchronization with backend
+- **Modern UI**: Clean, intuitive interface with consistent design system
+- **Google Authentication**: Login with Google OAuth
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 - **Node.js**: Version 16.0 or higher
@@ -76,7 +77,7 @@ The PointX frontend is a modern React application that delivers a responsive web
 5. **Access Application**:
    Open [http://localhost:3000](http://localhost:3000) in your browser
 
-## 🏗️ Project Architecture
+## Project Architecture
 
 ```
 frontend/
@@ -92,7 +93,8 @@ frontend/
 │   │   ├── Navigation.js            # Navigation component
 │   │   ├── QRGenerator.js           # QR code generation
 │   │   ├── QRScanner.js             # QR code scanning
-│   │   └── QRDebugger.js            # QR debugging tools
+│   │   ├── QRDebugger.js            # QR debugging tools
+│   │   └── GoogleAuthDebug.js       # Google auth debugging
 │   ├── api/                   # API client functions
 │   │   ├── axios.js                 # HTTP client configuration
 │   │   ├── admin.js                 # Admin API functions
@@ -101,13 +103,14 @@ frontend/
 │   │   └── AuthContext.js           # Authentication context
 │   ├── App.js                 # Main application component
 │   ├── index.js               # Application entry point
-│   └── index.css              # Global styles
+│   ├── index.css              # Global styles
+│   └── clubhouse-decorations.css    # Clubhouse theme styles
 ├── package.json               # Dependencies and scripts
 ├── craco.config.js           # Build configuration
 └── .env                      # Environment variables
 ```
 
-## 🔧 Key Dependencies
+## Key Dependencies
 
 ### Core Framework
 - **react**: ^18.2.0 - React framework
@@ -130,7 +133,7 @@ frontend/
 - **@craco/craco**: ^7.1.0 - Create React App Configuration Override
 - **react-scripts**: 5.0.1 - Build scripts and configuration
 
-## 🔌 API Integration
+## API Integration
 
 The frontend integrates with the PointX backend API through a centralized API client:
 
@@ -163,16 +166,16 @@ export const getAllUsers = () => api.get('/admin/users');
 export const adminTopup = (data) => api.post('/admin/topup', data);
 ```
 
-## 📋 Enhanced Bulk User Creation
+## Enhanced Bulk User Creation
 
-### New Features (v1.2.0)
-- **📁 CSV File Upload**: Drag-and-drop CSV file processing
-- **✏️ Manual Text Entry**: Direct CSV text input for quick operations
-- **📥 Sample Template Download**: Pre-formatted CSV templates
-- **🔍 Advanced Validation**: Real-time validation with detailed error reporting
-- **👀 Preview Mode**: Review users before creation with data preview table
-- **⚡ Batch Processing**: Handle up to 100 users per operation
-- **📊 Progress Tracking**: Detailed success/error reporting
+### New Features (v2.0.0)
+- **CSV File Upload**: Drag-and-drop CSV file processing
+- **Manual Text Entry**: Direct CSV text input for quick operations
+- **Sample Template Download**: Pre-formatted CSV templates
+- **Advanced Validation**: Real-time validation with detailed error reporting
+- **Preview Mode**: Review users before creation with data preview table
+- **Batch Processing**: Handle up to 100 users per operation
+- **Progress Tracking**: Detailed success/error reporting
 
 ### CSV Format Support
 ```csv
@@ -191,7 +194,7 @@ admin2,adminpass123,admin,Admin User,
 - **Data Sanitization**: Automatic data cleaning and formatting
 - **Error Reporting**: Detailed feedback on validation failures
 
-## 🎨 UI/UX Design
+## UI/UX Design
 
 ### Design System
 The application uses a consistent design system with:
@@ -221,7 +224,7 @@ The application uses a consistent design system with:
 - **Modular Design**: Easily maintainable and extensible component structure
 - **Theme Support**: Centralized styling with CSS custom properties
 
-## 🔒 Authentication & Security
+## Authentication & Security
 
 ### Authentication Flow
 ```javascript
@@ -264,7 +267,7 @@ export const AuthProvider = ({ children }) => {
 - **CSRF Protection**: Token-based request validation
 - **Secure Storage**: Sensitive data handling best practices
 
-## 📱 QR Code Operations
+## QR Code Operations
 
 ### QR Code Scanning
 ```javascript
@@ -318,7 +321,7 @@ const QRGenerator = ({ value, size = 256 }) => {
 };
 ```
 
-## 🚀 Building for Production
+## Building for Production
 
 ### Build Process
 ```bash
@@ -358,7 +361,7 @@ REACT_APP_VERSION=$npm_package_version
 REACT_APP_BUILD_DATE=$BUILD_DATE
 ```
 
-## 🌐 Deployment
+## Deployment
 
 ### Netlify Deployment
 1. **Connect Repository**: Link GitHub repository to Netlify
@@ -385,7 +388,7 @@ npm run build
 # Configure web server to serve index.html for all routes
 ```
 
-## 🛠️ Development Workflow
+## Development Workflow
 
 ### Development Scripts
 ```bash
@@ -429,7 +432,7 @@ npm test -- --coverage
 npm test -- --ci --coverage --watchAll=false
 ```
 
-## 🔧 Configuration & Customization
+## Configuration & Customization
 
 ### Environment Variables
 ```env
@@ -462,7 +465,7 @@ REACT_APP_VERSION=$npm_package_version
 }
 ```
 
-## 🚨 Troubleshooting
+## Troubleshooting
 
 ### Common Issues
 
@@ -511,7 +514,7 @@ if (process.env.REACT_APP_ENABLE_DEBUG === 'true') {
 }
 ```
 
-## 📊 Performance Optimization
+## Performance Optimization
 
 ### Best Practices
 - **Code Splitting**: Lazy load components with React.lazy()
@@ -531,13 +534,40 @@ getLCP(console.log);
 getTTFB(console.log);
 ```
 
-## 🔄 Version History
+## Version History
 
-- **v1.2.0**: Enhanced bulk user creation with CSV validation and error reporting
-- **v1.1.0**: Added comprehensive QR debugging tools and improved UI
-- **v1.0.0**: Initial release with admin, stall, and visitor dashboards
+### v2.0.0 (February 10, 2026) - Latest
+- Added Club House Theme with custom styling
+- Google Authentication integration
+- Performance improvements and timeout optimizations
+- Bug fixes for login and error handling
 
-## 🤝 Contributing
+### v1.5.0 (January 28-29, 2026)
+- Performance optimization for data fetching
+- UI improvements and bug fixes
+- Admin dashboard enhancements
+
+### v1.4.0 (January 25-27, 2026)
+- UI improvements and redesign
+- QR code issue resolutions
+- Authentication interceptor simplification
+
+### v1.3.0 (January 24, 2026)
+- Production deployment configuration
+- CORS fixes and environment setup
+
+### v1.2.0 (January 23, 2026)
+- Enhanced bulk user creation with CSV validation
+- Multi-role dashboard implementation
+
+### v1.1.0 (January 18-23, 2026)
+- Frontend development and component creation
+- QR code integration
+
+### v1.0.0 (January 18, 2026)
+- Initial release
+
+## Contributing
 
 1. **Fork Repository**: Create your own fork of the project
 2. **Create Feature Branch**: `git checkout -b feature/amazing-feature`
@@ -553,11 +583,11 @@ getTTFB(console.log);
 - Add PropTypes or TypeScript for type safety
 - Write meaningful commit messages
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🆘 Support & Resources
+## Support & Resources
 
 ### Documentation
 - [React Documentation](https://reactjs.org/docs)

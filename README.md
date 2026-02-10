@@ -2,21 +2,21 @@
 
 A comprehensive event management platform featuring QR code-based point transactions, web-based interfaces, and real-time game scoring.
 
-## 🎯 Overview
+## Overview
 
 PointX is a complete ecosystem for managing points, games, and transactions at events. It supports multiple user roles (Admin, Stall, Visitor) with dedicated web interfaces and a robust API backend.
 
 ### Key Features
 
-- **🎮 QR-Based Gaming**: Scan QR codes to start games and submit scores
-- **💰 Point Management**: Real-time wallet transactions and balance tracking
-- **👥 Multi-Role System**: Admin, Stall, and Visitor roles with specific permissions
-- **🌐 Web-Based Interface**: Responsive React application for all devices
-- **📊 Analytics**: Comprehensive dashboards with leaderboards and statistics
-- **🔐 Secure Authentication**: JWT-based auth with role-based access control
-- **📈 Real-Time Updates**: Live transaction processing and balance updates
+- **QR-Based Gaming**: Scan QR codes to start games and submit scores
+- **Point Management**: Real-time wallet transactions and balance tracking
+- **Multi-Role System**: Admin, Stall, and Visitor roles with specific permissions
+- **Web-Based Interface**: Responsive React application for all devices
+- **Analytics**: Comprehensive dashboards with leaderboards and statistics
+- **Secure Authentication**: JWT-based auth with role-based access control
+- **Real-Time Updates**: Live transaction processing and balance updates
 
-## 🏗️ Architecture
+## Architecture
 
 ```
 PointX/
@@ -35,7 +35,7 @@ PointX/
 └── docs/               # Documentation
 ```
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 - Python 3.8+
@@ -59,7 +59,7 @@ npm install
 npm start
 ```
 
-## 🌐 Deployment
+## Deployment
 
 ### Backend (Render/Railway/Heroku)
 1. Connect your GitHub repository
@@ -80,7 +80,7 @@ npm start
 4. Environment variables:
    - `REACT_APP_API_BASE_URL=https://your-backend-url.com/api`
 
-## 🔧 Configuration
+## Configuration
 
 ### Environment Variables
 
@@ -100,9 +100,9 @@ PORT=5000
 REACT_APP_API_BASE_URL=https://your-backend-url.com/api
 ```
 
-## 👥 User Roles & Features
+## User Roles & Features
 
-### 🔴 Admin
+### Admin
 - **Dashboard**: System overview with statistics
 - **User Management**: Create, search, and manage all users
 - **Bulk User Creation**: CSV upload with validation
@@ -111,19 +111,19 @@ REACT_APP_API_BASE_URL=https://your-backend-url.com/api
 - **Analytics**: Leaderboards, play statistics
 - **Attendance Tracking**: QR-based attendance marking
 
-### 🔵 Stall
+### Stall
 - **QR Scanner**: Scan visitor QR codes to start games
 - **Score Submission**: Enter and submit player scores
 - **Play History**: View completed games and earnings
 - **Wallet Info**: Check stall balance and transaction history
 
-### 🟢 Visitor
+### Visitor
 - **QR Code**: Personal QR code for game participation
 - **Wallet**: View balance and transaction history
 - **Leaderboard**: Compare scores with other players
 - **Game History**: Track all played games and scores
 
-## 📊 New Features
+## New Features
 
 ### Enhanced Bulk User Creation
 - **CSV Upload**: Upload formatted CSV files with validation
@@ -142,7 +142,7 @@ stall1,stallpass123,stall,Game Stall 1,15
 admin2,adminpass123,admin,Admin User,
 ```
 
-## 🔌 API Endpoints
+## API Endpoints
 
 ### Authentication
 - `POST /api/auth/login` - User login
@@ -168,7 +168,7 @@ admin2,adminpass123,admin,Admin User,
 - `GET /api/visitor/history` - Get visitor play history
 - `GET /api/visitor/leaderboard` - Get leaderboard
 
-## 🛠️ Development
+## Development
 
 ### Backend Development
 ```bash
@@ -185,7 +185,7 @@ npm install
 npm start
 ```
 
-## 📱 Web Application Features
+## Web Application Features
 
 - **Responsive Design**: Optimized for desktop, tablet, and mobile browsers
 - **Real-Time Updates**: Live data synchronization with backend
@@ -193,7 +193,7 @@ npm start
 - **Offline Support**: Cached data and graceful error handling
 - **Progressive Web App**: App-like experience in web browsers
 
-## 🔒 Security Features
+## Security Features
 
 - **JWT Authentication**: Secure token-based authentication
 - **Role-Based Access**: Granular permissions per user role
@@ -202,7 +202,7 @@ npm start
 - **Input Validation**: Comprehensive data validation and sanitization
 - **SQL Injection Prevention**: Parameterized queries via Supabase
 
-## 📈 Analytics & Reporting
+## Analytics & Reporting
 
 - **Real-Time Dashboards**: Live statistics and metrics
 - **Transaction Tracking**: Complete audit trail of all operations
@@ -210,7 +210,7 @@ npm start
 - **Export Capabilities**: CSV export for external analysis
 - **Leaderboards**: Dynamic ranking systems
 
-## 🤝 Contributing
+## Contributing
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
@@ -218,22 +218,60 @@ npm start
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🆘 Support
+## Support
 
 For support and questions:
 - Create an issue in the GitHub repository
 - Check the documentation in the `/docs` folder
 - Review the API documentation at `/api/docs`
 
-## 🔄 Version History
+## Version History
 
-- **v1.2.0** - Enhanced bulk user creation with CSV validation
-- **v1.1.0** - Improved web interface with QR debugging tools
-- **v1.0.0** - Initial release with web interface and API
+### v2.0.0 (February 10, 2026) - Latest
+- **Added Club House Theme**: Complete UI redesign with clubhouse-inspired aesthetics
+- **Google Authentication**: Integrated Google OAuth login functionality
+- **Performance Improvements**: Increased timeout settings and optimized admin dashboard
+- **Bug Fixes**: Resolved error bugs and login issues
+
+### v1.5.0 (January 28-29, 2026)
+- **Performance Optimization**: Reduced time taken to fetch routes
+- **Query Improvements**: Fixed query-related bugs for better database performance
+- **Bug Fixes**: Resolved pending score logic and various system bugs
+- **Admin Enhancements**: Made admin dashboard faster and more responsive
+
+### v1.4.0 (January 25-27, 2026)
+- **UI Improvements**: Enhanced user interface with better visual design
+- **QR Code Fixes**: Resolved all QR-related scanning and generation issues
+- **Timeout Adjustments**: Increased timeout for better stability
+- **Score System**: Fixed pending score resolution bugs
+- **Authentication**: Simplified axios request/response interceptors
+
+### v1.3.0 (January 24, 2026)
+- **Production Deployment**: Production-ready configuration with CORS fixes
+- **Environment Configuration**: Added API base URL to environment variables
+- **Deployment Fixes**: Resolved multiple deployment issues for Vercel/Render
+- **CORS Security**: Hardcoded domain support for production deployment
+- **Community Contributions**: Merged pull requests with bug fixes and updates
+
+### v1.2.0 (January 23, 2026)
+- **Frontend Development**: Complete React-based web interface
+- **Multi-Role Support**: Dedicated dashboards for Admin, Stall, and Visitor roles
+- **Enhanced Bulk User Creation**: CSV upload with validation
+- **QR Integration**: Browser-based QR scanning and generation
+
+### v1.1.0 (January 18-23, 2026)
+- **Core Features**: Basic point management and transaction system
+- **Backend API**: Flask-based REST API with Supabase integration
+- **Environment Setup**: Supabase and Flask configuration
+- **Authentication**: JWT-based authentication system
+
+### v1.0.0 (January 18, 2026)
+- **Initial Release**: Project initialization and basic structure
+- **Foundation**: Core architecture and database schema
 
 ---
 
