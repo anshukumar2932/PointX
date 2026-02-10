@@ -8,6 +8,7 @@ const Login = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [googleError, setGoogleError] = useState('');
+  const [isSuccess, setIsSuccess] = useState(false);
 
   const { login, loginWithGoogle } = useAuth();
 
@@ -19,16 +20,21 @@ const Login = () => {
     
     const result = await loginWithGoogle(response.credential);
 
-    if (!result.success) {
+    if (result.success) {
+      setIsSuccess(true);
+      // Wait 2 seconds for the "Hot Dog Dance" celebration before redirecting
+      await new Promise(r => setTimeout(r, 2000));
+    } else {
       setGoogleError(result.error);
     }
     setLoading(false);
   }, [loginWithGoogle]);
 
   // Initialize Google Sign-In
-  useEffect(() => {
+ useEffect(() => {
+  const renderGoogleButton = () => {
     // eslint-disable-next-line no-undef
-    if (window.google) {
+    if (window.google && window.google.accounts) {
       const clientId = process.env.REACT_APP_GOOGLE_CLIENT_ID;
       
       // eslint-disable-next-line no-undef
@@ -36,37 +42,45 @@ const Login = () => {
         client_id: clientId,
         callback: handleGoogleResponse,
         auto_select: false,
-        cancel_on_tap_outside: false,
         ux_mode: "popup",
-        timeout: 210000,
       });
 
-      // eslint-disable-next-line no-undef
-      google.accounts.id.renderButton(
-        document.getElementById("googleSignInBtn"),
-        { 
+      const btnContainer = document.getElementById("googleSignInBtn");
+      if (btnContainer) {
+        // eslint-disable-next-line no-undef
+        google.accounts.id.renderButton(btnContainer, { 
           theme: "outline", 
           size: "large", 
           width: 350,
           text: "signin_with",
           shape: "rectangular",
-          type: "standard",
-          prompt_parent_id: "googleSignInBtn"
-        }
-      );
-
-      // eslint-disable-next-line no-undef
-      google.accounts.id.cancel();
-      
-      const buttonContainer = document.getElementById("googleSignInBtn");
-      if (buttonContainer) {
-        buttonContainer.addEventListener('click', () => {
-          // eslint-disable-next-line no-undef
-          google.accounts.id.disableAutoSelect();
         });
       }
     }
-  }, [handleGoogleResponse]);
+  };
+
+  // 1. Try to render immediately
+  renderGoogleButton();
+
+  // 2. Fallback: If the script hasn't loaded yet, wait for it
+  const script = document.querySelector('script[src="https://accounts.google.com/gsi/client"]');
+  if (script) {
+    script.addEventListener('load', renderGoogleButton);
+  }
+
+  // 3. Polling fallback (Safety net for slow networks)
+  const interval = setInterval(() => {
+    if (window.google) {
+      renderGoogleButton();
+      clearInterval(interval);
+    }
+  }, 1000);
+
+  return () => {
+    if (script) script.removeEventListener('load', renderGoogleButton);
+    clearInterval(interval);
+  };
+}, [handleGoogleResponse]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -84,6 +98,57 @@ const Login = () => {
   
   return (
     <div className="container">
+      {/* Success Overlay */}
+      {isSuccess && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.9)',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999,
+          animation: 'fadeIn 0.3s ease-in'
+        }}>
+          <div style={{
+            fontSize: '120px',
+            marginBottom: '20px',
+            animation: 'celebrationBounce 0.6s ease-in-out infinite'
+          }}>
+            🏰
+          </div>
+          <div style={{
+            fontSize: '32px',
+            fontWeight: '900',
+            color: 'white',
+            textAlign: 'center',
+            marginBottom: '16px',
+            textShadow: '0 0 20px rgba(220, 38, 38, 0.8)',
+            animation: 'pulse 1s ease-in-out infinite'
+          }}>
+            WELCOME HOME!
+          </div>
+          <div style={{
+            fontSize: '48px',
+            animation: 'hotdogDance 0.5s ease-in-out infinite'
+          }}>
+            🌭
+          </div>
+          <div style={{
+            fontSize: '18px',
+            color: '#fbbf24',
+            fontWeight: '700',
+            marginTop: '16px',
+            letterSpacing: '2px'
+          }}>
+            HOT DOG! HOT DOG! HOT DIGGITY DOG!
+          </div>
+        </div>
+      )}
       {/* Mickey and Friends welcoming */}
       <div style={{
         textAlign: 'center',
@@ -179,12 +244,10 @@ const Login = () => {
             textTransform: 'uppercase',
             letterSpacing: '1px',
             border: '1px solid rgba(220, 38, 38, 0.5)',
-            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
-            marginBottom: '16px'
+            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)'
           }}>
             EXCLUSIVE CLUB ACCESS
           </div>
-          <p style={{ color: '#6b7280', fontSize: '14px', fontWeight: '600' }}>Sign in to your account</p>
         </div>
 
         <form onSubmit={handleSubmit}>
@@ -311,25 +374,13 @@ const Login = () => {
         {/* 3. Divider and Google Button */}
         <div className="luxury-divider" style={{ margin: '24px 0' }}></div>
         
-        <div id="googleSignInBtn" style={{ width: '100%' }}></div>
-        
-        {/* Help text for account switching */}
-        <div style={{ 
-          textAlign: 'center', 
-          marginTop: '12px', 
-          fontSize: '12px', 
-          color: '#6b7280' 
-        }}>
-          <p style={{ margin: '4px 0' }}>
-            Not seeing all your accounts?
-          </p>
-          <p style={{ margin: '4px 0' }}>
-            <strong>Quick fix:</strong> Open this page in an <strong>incognito/private window</strong>
-          </p>
-          <p style={{ margin: '4px 0', fontSize: '11px' }}>
-            Or clear cookies for accounts.google.com
-          </p>
-        </div>
+        <div id="googleSignInBtn" style={{ 
+          width: '100%', 
+          minHeight: '44px',
+          display: 'flex', 
+          justifyContent: 'center',
+          margin: '10px 0' 
+        }}></div>
 
         {/* Hot Dog Dance footer */}
         <div style={{
@@ -368,6 +419,50 @@ const Login = () => {
           }
           75% {
             transform: rotate(10deg) scale(1.1);
+          }
+        }
+
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+          }
+          to {
+            opacity: 1;
+          }
+        }
+
+        @keyframes celebrationBounce {
+          0%, 100% {
+            transform: translateY(0) scale(1);
+          }
+          50% {
+            transform: translateY(-30px) scale(1.2);
+          }
+        }
+
+        @keyframes hotdogDance {
+          0%, 100% {
+            transform: rotate(0deg) scale(1);
+          }
+          25% {
+            transform: rotate(-15deg) scale(1.2);
+          }
+          50% {
+            transform: rotate(0deg) scale(1.3);
+          }
+          75% {
+            transform: rotate(15deg) scale(1.2);
+          }
+        }
+
+        @keyframes pulse {
+          0%, 100% {
+            opacity: 1;
+            transform: scale(1);
+          }
+          50% {
+            opacity: 0.8;
+            transform: scale(1.05);
           }
         }
       `}</style>
