@@ -84,10 +84,107 @@ const Login = () => {
   
   return (
     <div className="container">
-      <div className="card" style={{ maxWidth: '400px', margin: '20px auto' }}>
+      {/* Mickey and Friends welcoming */}
+      <div style={{
+        textAlign: 'center',
+        marginBottom: '20px',
+        animation: 'bounce 2s ease-in-out infinite'
+      }}>
+        <div style={{ fontSize: '60px', marginBottom: '10px' }}>
+          🏰
+        </div>
+        <div style={{
+          fontSize: '14px',
+          color: 'white',
+          fontWeight: '700',
+          textShadow: '0 2px 4px rgba(0, 0, 0, 0.5)',
+          background: 'rgba(220, 38, 38, 0.2)',
+          padding: '8px 16px',
+          borderRadius: '20px',
+          display: 'inline-block',
+          border: '2px solid rgba(220, 38, 38, 0.4)'
+        }}>
+          🎵 Welcome to the Clubhouse! 🎵
+        </div>
+      </div>
+
+      <div className="card club-pattern" style={{ maxWidth: '450px', margin: '40px auto', position: 'relative' }}>
+        {/* Character decorations */}
+        <div style={{
+          position: 'absolute',
+          top: '-25px',
+          left: '20px',
+          fontSize: '40px',
+          animation: 'wave-hand 2s ease-in-out infinite',
+          filter: 'drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3))'
+        }}>
+          👋
+        </div>
+        <div style={{
+          position: 'absolute',
+          top: '-25px',
+          right: '20px',
+          fontSize: '40px',
+          animation: 'wave-hand 2s ease-in-out 0.5s infinite',
+          filter: 'drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3))'
+        }}>
+          🎀
+        </div>
+
         <div className="text-center mb-lg">
-          <h1>PointX</h1>
-          <p style={{ color: '#6b7280' }}>Sign in to your account</p>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '16px',
+            marginBottom: '16px'
+          }}>
+            <div style={{
+              width: '12px',
+              height: '12px',
+              background: '#dc2626',
+              transform: 'rotate(45deg)',
+              boxShadow: '0 0 20px rgba(220, 38, 38, 0.8)'
+            }}></div>
+            <div style={{ 
+              fontSize: '48px', 
+              fontWeight: '900',
+              color: '#1f2937',
+              textTransform: 'uppercase',
+              letterSpacing: '4px',
+              position: 'relative'
+            }}>
+              POINT
+              <span style={{
+                color: '#dc2626',
+                textShadow: '0 0 20px rgba(220, 38, 38, 0.5)'
+              }}>X</span>
+            </div>
+            <div style={{
+              width: '12px',
+              height: '12px',
+              background: '#dc2626',
+              transform: 'rotate(45deg)',
+              boxShadow: '0 0 20px rgba(220, 38, 38, 0.8)'
+            }}></div>
+          </div>
+          <div style={{
+            display: 'inline-block',
+            background: 'linear-gradient(135deg, #1f2937 0%, #111827 100%)',
+            color: 'white',
+            padding: '6px 16px',
+            borderRadius: '20px',
+            fontSize: '11px',
+            fontWeight: '900',
+            textTransform: 'uppercase',
+            letterSpacing: '1px',
+            border: '1px solid rgba(220, 38, 38, 0.5)',
+            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
+            marginBottom: '16px'
+          }}>
+            EXCLUSIVE CLUB ACCESS
+          </div>
+          <p style={{ color: '#6b7280', fontSize: '14px', fontWeight: '600' }}>Sign in to your account</p>
         </div>
 
         <form onSubmit={handleSubmit}>
@@ -212,9 +309,7 @@ const Login = () => {
         )}
 
         {/* 3. Divider and Google Button */}
-        <div style={{ textAlign: 'center', margin: '20px 0', color: '#6b7280', fontSize: '14px' }}>
-          OR
-        </div>
+        <div className="luxury-divider" style={{ margin: '24px 0' }}></div>
         
         <div id="googleSignInBtn" style={{ width: '100%' }}></div>
         
@@ -235,7 +330,47 @@ const Login = () => {
             Or clear cookies for accounts.google.com
           </p>
         </div>
+
+        {/* Hot Dog Dance footer */}
+        <div style={{
+          textAlign: 'center',
+          marginTop: '20px',
+          padding: '12px',
+          background: 'rgba(251, 191, 36, 0.1)',
+          borderRadius: '8px',
+          border: '2px dashed rgba(251, 191, 36, 0.3)'
+        }}>
+          <div style={{
+            fontSize: '24px',
+            marginBottom: '8px',
+            animation: 'dance 1s ease-in-out infinite'
+          }}>
+            🌭
+          </div>
+          <div style={{
+            fontSize: '11px',
+            color: '#92400e',
+            fontWeight: '700',
+            letterSpacing: '1px'
+          }}>
+            HOT DOG! LET'S GET STARTED!
+          </div>
+        </div>
       </div>
+
+      <style>{`
+        @keyframes dance {
+          0%, 100% {
+            transform: rotate(0deg) scale(1);
+          }
+          25% {
+            transform: rotate(-10deg) scale(1.1);
+          }
+          75% {
+            transform: rotate(10deg) scale(1.1);
+          }
+        }
+      `}</style>
     </div>
   );
 };

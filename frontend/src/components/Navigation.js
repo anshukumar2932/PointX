@@ -17,25 +17,19 @@ const Navigation = () => {
     <div className="header">
       <div className="nav">
         <div className="logo">
-          PointX
+          POINTX
         </div>
         
         <div className="nav-links">
-          <span className="nav-link hidden-mobile">
+          <span className="member-badge hidden-mobile">
             {getRoleIcon(user.role)} - {user.username}
           </span>
-          <span className="nav-link hidden-desktop">
+          <span className="member-badge hidden-desktop">
             {user.username}
           </span>
           <button 
             onClick={logout}
             className="btn btn-secondary btn-sm"
-            style={{ 
-              background: 'rgba(255, 255, 255, 0.2)', 
-              border: '1px solid rgba(255, 255, 255, 0.3)',
-              color: 'white',
-              backdropFilter: 'blur(10px)'
-            }}
           >
             Logout
           </button>

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import Papa from "papaparse";
 import { Html5QrcodeScanner } from "html5-qrcode";
 import QRDebugger from "./QRDebugger";
+import ClubLoader from "./ClubLoader";
 import api from "../api/axios";
 import MessageAlert from "./MessageAlert";
 
@@ -579,7 +580,27 @@ const AdminDashboard = () => {
 
   return (
     <div className="container">
-      <h1 className="text-center mb-lg">Admin Dashboard</h1>
+      <div style={{
+        textAlign: 'center',
+        marginBottom: '24px'
+      }}>
+        <h1 style={{
+          fontSize: '36px',
+          fontWeight: '900',
+          background: 'linear-gradient(135deg, #dc2626 0%, #7f1d1d 100%)',
+          WebkitBackgroundClip: 'text',
+          WebkitTextFillColor: 'transparent',
+          backgroundClip: 'text',
+          textTransform: 'uppercase',
+          letterSpacing: '2px',
+          marginBottom: '8px'
+        }}>
+          Admin Dashboard
+        </h1>
+        <div className="premium-badge">
+          MASTER CONTROL
+        </div>
+      </div>
 
       <div className="tab-nav">
         {["overview", "users", "wallets", "attendance", "plays", "topups", "leaderboard", "create", "qr-debug"].map(tab => (
@@ -602,24 +623,24 @@ const AdminDashboard = () => {
         />
       )}
 
-      {isBusy && <div className="loading">Processing...</div>}
+      {isBusy && <ClubLoader message="Processing..." />}
 
       {/* ──────────────────────────────────────────────── */}
       {/* OVERVIEW */}
       {/* ──────────────────────────────────────────────── */}
       {activeTab === "overview" && (
         <div className="grid grid-3">
-          <div className="card text-center">
-            <h4 className="mb-sm">Total Users</h4>
-            <div className="stat-value">{users.length}</div>
+          <div className="stat-card">
+            <div className="stat-card-label">Total Users</div>
+            <div className="stat-card-value">{users.length}</div>
           </div>
-          <div className="card text-center">
-            <h4 className="mb-sm">Total Plays</h4>
-            <div className="stat-value">{plays.length}</div>
+          <div className="stat-card">
+            <div className="stat-card-label">Total Plays</div>
+            <div className="stat-card-value">{plays.length}</div>
           </div>
-          <div className="card text-center">
-            <h4 className="mb-sm">Pending Top-ups</h4>
-            <div className="stat-value">{topupRequests.length}</div>
+          <div className="stat-card">
+            <div className="stat-card-label">Pending Top-ups</div>
+            <div className="stat-card-value">{topupRequests.length}</div>
           </div>
         </div>
       )}
@@ -628,8 +649,8 @@ const AdminDashboard = () => {
       {/* USERS */}
       {/* ──────────────────────────────────────────────── */}
       {activeTab === "users" && (
-        <div className="card">
-          <h3 className="mb-md">Users</h3>
+        <div className="card club-pattern">
+          <h3 className="card-title">Users</h3>
           <input
             className="input"
             placeholder="Search username or role..."
@@ -669,8 +690,8 @@ const AdminDashboard = () => {
       {/* WALLETS */}
       {/* ──────────────────────────────────────────────── */}
       {activeTab === "wallets" && (
-        <div className="card">
-          <h3 className="mb-md">Wallets</h3>
+        <div className="card club-pattern">
+          <h3 className="card-title">Wallets</h3>
           <div style={{ overflowX: 'auto' }}>
             <table className="table table-mobile">
               <thead>
@@ -723,8 +744,8 @@ const AdminDashboard = () => {
       {/* PLAYS */}
       {/* ──────────────────────────────────────────────── */}
       {activeTab === "plays" && (
-        <div className="card">
-          <h3>Plays</h3>
+        <div className="card club-pattern">
+          <h3 className="card-title">Plays</h3>
           {plays.length === 0 ? (
             <div className="text-center p-lg" style={{ color: '#6b7280' }}>
               <p>No plays recorded yet</p>
@@ -779,8 +800,8 @@ const AdminDashboard = () => {
       {/* TOPUPS */}
       {/* ──────────────────────────────────────────────── */}
       {activeTab === "topups" && (
-        <div className="card">
-          <h3 className="mb-md">Pending Top-ups</h3>
+        <div className="card club-pattern">
+          <h3 className="card-title">Pending Top-ups</h3>
           
           <div style={{ marginBottom: '15px', display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
             <button
@@ -857,8 +878,8 @@ const AdminDashboard = () => {
       {/* LEADERBOARD */}
       {/* ──────────────────────────────────────────────── */}
       {activeTab === "leaderboard" && (
-        <div className="card">
-          <h3>Leaderboard</h3>
+        <div className="card club-pattern">
+          <h3 className="card-title">Leaderboard</h3>
           <table className="table">
             <thead><tr><th>Rank</th><th>User</th><th>Total Score</th><th>Plays</th></tr></thead>
             <tbody>
@@ -881,8 +902,8 @@ const AdminDashboard = () => {
       {activeTab === "attendance" && (
         <div className="grid grid-2">
           {/* QR Camera + fallback paste */}
-          <div className="card">
-            <h3 className="mb-md">QR Attendance (Live Camera)</h3>
+          <div className="card club-pattern">
+            <h3 className="card-title">QR Attendance (Live Camera)</h3>
 
             {qrScanResult && (
               <div className="success mb-md">
@@ -921,8 +942,8 @@ const AdminDashboard = () => {
           </div>
 
           {/* Manual */}
-          <div className="card">
-            <h3 className="mb-md">Manual Attendance</h3>
+          <div className="card club-pattern">
+            <h3 className="card-title">Manual Attendance</h3>
             <form onSubmit={handleAttendanceSubmit}>
               <input
                 className="input"
@@ -953,8 +974,8 @@ const AdminDashboard = () => {
       {/* ──────────────────────────────────────────────── */}
       {activeTab === "create" && (
         <div className="grid grid-auto">
-          <div className="card">
-            <h3 className="mb-md">Create User</h3>
+          <div className="card club-pattern">
+            <h3 className="card-title">Create User</h3>
             <form onSubmit={handleCreateUser}>
               <input className="input" placeholder="Username" value={newUser.username} onChange={e => setNewUser({...newUser, username: e.target.value})} disabled={isBusy} required />
               <input className="input" type="password" placeholder="Password" value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} disabled={isBusy} required />
@@ -970,8 +991,8 @@ const AdminDashboard = () => {
             </form>
           </div>
 
-          <div className="card">
-            <h3 className="mb-md">Create Stall</h3>
+          <div className="card club-pattern">
+            <h3 className="card-title">Create Stall</h3>
             <form onSubmit={handleCreateStall}>
               <input className="input" placeholder="Username" value={newStall.username} onChange={e => setNewStall({...newStall, username: e.target.value})} disabled={isBusy} required />
               <input className="input" type="password" placeholder="Password" value={newStall.password} onChange={e => setNewStall({...newStall, password: e.target.value})} disabled={isBusy} required />
@@ -982,8 +1003,8 @@ const AdminDashboard = () => {
             </form>
           </div>
 
-          <div className="card">
-            <h3 className="mb-md">Bulk User Upload</h3>
+          <div className="card club-pattern">
+            <h3 className="card-title">Bulk User Upload</h3>
             
             {/* Format Instructions */}
             <div style={{ 
@@ -1176,49 +1197,69 @@ admin2,adminpass,admin,Admin User,`}
           left: 0,
           right: 0,
           bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+          backgroundColor: 'rgba(0, 0, 0, 0.85)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          zIndex: 1000,
+          zIndex: 10000,
           padding: '20px'
         }}
         onClick={closeImagePreview}
         >
+          {/* Close Button - Fixed outside scrollable area */}
+          <button
+            onClick={closeImagePreview}
+            style={{
+              position: 'fixed',
+              top: '20px',
+              right: '20px',
+              background: '#dc2626',
+              color: 'white',
+              border: '3px solid white',
+              borderRadius: '50%',
+              width: '50px',
+              height: '50px',
+              cursor: 'pointer',
+              fontSize: '28px',
+              fontWeight: '900',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 10001,
+              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.5)',
+              transition: 'all 0.2s ease'
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.background = '#991b1b';
+              e.target.style.transform = 'scale(1.15) rotate(90deg)';
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.background = '#dc2626';
+              e.target.style.transform = 'scale(1) rotate(0deg)';
+            }}
+          >
+            ×
+          </button>
+
           <div style={{
             backgroundColor: 'white',
-            borderRadius: '8px',
-            padding: '20px',
+            borderRadius: '12px',
+            padding: '30px',
             maxWidth: '90vw',
             maxHeight: '90vh',
             overflow: 'auto',
-            position: 'relative'
+            position: 'relative',
+            boxShadow: '0 10px 50px rgba(0, 0, 0, 0.5)'
           }}
           onClick={(e) => e.stopPropagation()}
           >
-            <button
-              onClick={closeImagePreview}
-              style={{
-                position: 'absolute',
-                top: '10px',
-                right: '10px',
-                background: '#dc2626',
-                color: 'white',
-                border: 'none',
-                borderRadius: '50%',
-                width: '30px',
-                height: '30px',
-                cursor: 'pointer',
-                fontSize: '16px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}
-            >
-              ×
-            </button>
             
-            <h3 style={{ marginBottom: '15px', paddingRight: '40px' }}>Payment Proof</h3>
+            <h3 style={{ 
+              marginBottom: '20px',
+              color: '#1f2937',
+              fontSize: '20px',
+              fontWeight: '700'
+            }}>Payment Proof</h3>
             
             <div style={{ textAlign: 'center' }}>
               {previewImage.error ? (

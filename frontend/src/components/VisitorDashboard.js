@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import api from "../api/axios";
 import QRGenerator from "./QRGenerator";
+import ClubLoader from "./ClubLoader";
 import { useAuth } from "../context/AuthContext";
 import MessageAlert from "./MessageAlert";
 
@@ -149,9 +150,8 @@ const VisitorDashboard = () => {
   // Show loading while waiting for authentication or user data
   if (!authUser || userLoading) {
     return (
-      <div className="loading">
-        <h2>Loading Visitor Dashboard</h2>
-        <p>Please wait while we load your information...</p>
+      <div className="container">
+        <ClubLoader message="Loading Visitor Dashboard" />
       </div>
     );
   }
@@ -177,16 +177,35 @@ const VisitorDashboard = () => {
   // Show loading if we have user data but no wallet data yet
   if (!wallet) {
     return (
-      <div className="loading">
-        <h2>Loading Wallet Information</h2>
-        <p>Please wait while we load your wallet...</p>
+      <div className="container">
+        <ClubLoader message="Loading Wallet Information" />
       </div>
     );
   }
 
   return (
     <div className="container">
-      <h1 className="text-center mb-lg">Visitor Dashboard</h1>
+      <div style={{
+        textAlign: 'center',
+        marginBottom: '24px'
+      }}>
+        <h1 style={{
+          fontSize: '36px',
+          fontWeight: '900',
+          background: 'linear-gradient(135deg, #dc2626 0%, #7f1d1d 100%)',
+          WebkitBackgroundClip: 'text',
+          WebkitTextFillColor: 'transparent',
+          backgroundClip: 'text',
+          textTransform: 'uppercase',
+          letterSpacing: '2px',
+          marginBottom: '8px'
+        }}>
+          Visitor Dashboard
+        </h1>
+        <div className="premium-badge">
+          CLUB MEMBER
+        </div>
+      </div>
 
       <div className="tab-nav">
         {["wallet", "attendance", "topup", "history", "leaderboard"].map(tab => (
@@ -204,8 +223,8 @@ const VisitorDashboard = () => {
 
       {/* ================= WALLET ================= */}
       {activeTab === "wallet" && (
-        <div className="card text-center">
-          <h3 className="mb-md">My Wallet</h3>
+        <div className="card club-pattern text-center">
+          <h3 className="card-title">My Wallet</h3>
 
           <div className="balance mb-md">
             {wallet.balance} points
@@ -310,8 +329,8 @@ const VisitorDashboard = () => {
 
       {/* ================= TOPUP REQUEST ================= */}
       {activeTab === "topup" && (
-        <div className="card">
-          <h3 className="mb-md">Request Wallet Topup</h3>
+        <div className="card club-pattern">
+          <h3 className="card-title">Request Wallet Topup</h3>
           
           <p className="mb-md" style={{ color: '#6b7280', fontSize: '14px' }}>
             Upload payment proof to request wallet topup. Admin will review and approve your request.
@@ -373,8 +392,8 @@ const VisitorDashboard = () => {
 
       {/* ================= HISTORY ================= */}
       {activeTab === "history" && (
-        <div className="card">
-          <h3 className="mb-md">Transaction History</h3>
+        <div className="card club-pattern">
+          <h3 className="card-title">Transaction History</h3>
 
           {history.length === 0 ? (
             <div className="text-center p-lg" style={{ color: '#6b7280' }}>
@@ -424,8 +443,8 @@ const VisitorDashboard = () => {
 
       {/* ================= LEADERBOARD ================= */}
       {activeTab === "leaderboard" && (
-        <div className="card">
-          <h3 className="mb-md">Leaderboard</h3>
+        <div className="card club-pattern">
+          <h3 className="card-title">Leaderboard</h3>
 
           {leaderboard.length === 0 ? (
             <div className="text-center p-lg" style={{ color: '#6b7280' }}>

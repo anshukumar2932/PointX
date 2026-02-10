@@ -5,6 +5,7 @@ import AdminDashboard from './components/AdminDashboard';
 import StallDashboard from './components/StallDashboard';
 import VisitorDashboard from './components/VisitorDashboard';
 import Navigation from './components/Navigation';
+import ClubLoader from './components/ClubLoader';
 import { AuthProvider, useAuth } from './context/AuthContext';
 
 function AppContent() {
@@ -13,9 +14,7 @@ function AppContent() {
   if (loading) {
     return (
       <div className="container">
-        <div className="loading">
-          <h2>Loading PointX...</h2>
-        </div>
+        <ClubLoader message="Loading PointX..." />
       </div>
     );
   }

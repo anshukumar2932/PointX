@@ -266,7 +266,27 @@ const StallDashboard = () => {
 
   return (
     <div className="container">
-      <h1 className="text-center mb-lg">Stall Dashboard</h1>
+      <div style={{
+        textAlign: 'center',
+        marginBottom: '24px'
+      }}>
+        <h1 style={{
+          fontSize: '36px',
+          fontWeight: '900',
+          background: 'linear-gradient(135deg, #dc2626 0%, #7f1d1d 100%)',
+          WebkitBackgroundClip: 'text',
+          WebkitTextFillColor: 'transparent',
+          backgroundClip: 'text',
+          textTransform: 'uppercase',
+          letterSpacing: '2px',
+          marginBottom: '8px'
+        }}>
+          Stall Dashboard
+        </h1>
+        <div className="premium-badge">
+          GAME OPERATOR
+        </div>
+      </div>
 
       <div className="tab-nav">
         {["scanner", "pending", "score", "history", "wallet", "debug"].map((tab) => (
@@ -291,8 +311,8 @@ const StallDashboard = () => {
 
       {/* -------- SCANNER -------- */}
       {activeTab === "scanner" && (
-        <div className="card">
-          <h3 className="card-title"> QR Scanner</h3>
+        <div className="card club-pattern">
+          <h3 className="card-title">QR Scanner</h3>
           
           <div className="info-box mb-md">
             <h4 className="info-title"> Instructions</h4>
@@ -301,7 +321,7 @@ const StallDashboard = () => {
               <li>Position QR code in the camera frame</li>
               <li>Wait for automatic scan and game start</li>
             </ul>
-            <p className="info-tip">💡 Press Enter to start scanner, ESC to stop</p>
+            <p className="info-tip">TIP: Press Enter to start scanner, ESC to stop</p>
           </div>
           
           {!scanning && (
@@ -342,11 +362,23 @@ const StallDashboard = () => {
 
       {/* -------- PENDING GAMES -------- */}
       {activeTab === "pending" && (
-        <div className="card">
-          <h3 className="card-title"> Pending Games</h3>
+        <div className="card club-pattern">
+          <h3 className="card-title">Pending Games</h3>
           {pendingGames.length === 0 ? (
             <div className="empty-state">
-              <div className="empty-icon"></div>
+              <div className="empty-icon" style={{
+                width: '80px',
+                height: '80px',
+                margin: '0 auto 16px',
+                border: '4px solid rgba(220, 38, 38, 0.2)',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '32px',
+                color: 'rgba(220, 38, 38, 0.3)',
+                fontWeight: '900'
+              }}>-</div>
               <h4 className="empty-title">No pending games!</h4>
               <p className="empty-description">All games have been completed.</p>
             </div>
@@ -400,7 +432,7 @@ const StallDashboard = () => {
                               className="btn btn-primary btn-sm"
                               onClick={() => selectPendingGame(game)}
                             >
-                              ⚡ Submit Score
+                              Submit Score
                             </button>
                           </td>
                         </tr>
@@ -416,14 +448,19 @@ const StallDashboard = () => {
 
       {/* -------- SCORE -------- */}
       {activeTab === "score" && (currentPlay || selectedPendingGame) && (
-        <div className="card">
+        <div className="card club-pattern">
           <h3 className="card-title">
-             Submit Score {selectedPendingGame && <span className="badge badge-warning">Pending Game</span>}
+            Submit Score {selectedPendingGame && <span className="badge badge-warning">Pending Game</span>}
           </h3>
 
           {/* Player Info */}
           <div className="player-info mb-md">
-            <div className="player-avatar">👤</div>
+            <div className="player-avatar" style={{
+              background: 'linear-gradient(135deg, #dc2626 0%, #991b1b 100%)',
+              color: 'white',
+              fontWeight: '900',
+              fontSize: '20px'
+            }}>P</div>
             <div className="player-details">
               <h4 className="player-name">
                 {(currentPlay || selectedPendingGame).visitor_username || "Unknown Player"}
@@ -436,12 +473,12 @@ const StallDashboard = () => {
               )}
 
               <p className="player-wallet">
-                🔑 {((currentPlay || selectedPendingGame).visitor_wallet || (currentPlay || selectedPendingGame).from_wallet)?.slice(0, 8)}...
+                ID: {((currentPlay || selectedPendingGame).visitor_wallet || (currentPlay || selectedPendingGame).from_wallet)?.slice(0, 8)}...
               </p>
 
               {selectedPendingGame && (
                 <p className="game-started">
-                  🕒 Started: {formatUTC(selectedPendingGame.created_at)}
+                  Started: {formatUTC(selectedPendingGame.created_at)}
                 </p>
               )}
             </div>
@@ -482,7 +519,7 @@ const StallDashboard = () => {
                 required
               />
               {scoreError && (
-                <p className="form-error">⚠️ {scoreError}</p>
+                <p className="form-error">{scoreError}</p>
               )}
             </div>
 
@@ -490,7 +527,7 @@ const StallDashboard = () => {
               className="btn btn-success btn-full btn-lg"
               disabled={loading || score === "" || score < 0 || score > 10}
             >
-              {loading ? "⚡ Submitting..." : " Submit Score"}
+              {loading ? "Submitting..." : "Submit Score"}
             </button>
 
             {selectedPendingGame && (
@@ -503,7 +540,7 @@ const StallDashboard = () => {
                   setActiveTab("pending");
                 }}
               >
-                ← Back to Pending
+                Back to Pending
               </button>
             )}
           </form>
@@ -512,8 +549,8 @@ const StallDashboard = () => {
 
       {/* -------- HISTORY -------- */}
       {activeTab === "history" && (
-        <div className="card">
-          <h3 className="card-title"> Play History</h3>
+        <div className="card club-pattern">
+          <h3 className="card-title">Play History</h3>
           <div className="table-container">
             <table className="table">
               <thead>
@@ -557,8 +594,8 @@ const StallDashboard = () => {
 
       {/* -------- WALLET -------- */}
       {activeTab === "wallet" && wallet && (
-        <div className="card">
-          <h3 className="card-title"> My Wallet</h3>
+        <div className="card club-pattern">
+          <h3 className="card-title">My Wallet</h3>
           
           <div className="wallet-display">
             <div className="wallet-balance">
@@ -568,7 +605,7 @@ const StallDashboard = () => {
             
             <div className="wallet-status">
               <span className={`badge ${wallet.is_active ? 'badge-success' : 'badge-danger'}`}>
-                {wallet.is_active ? "✓ Active" : "Frozen"}
+                {wallet.is_active ? "Active" : "Frozen"}
               </span>
             </div>
           </div>
@@ -581,8 +618,8 @@ const StallDashboard = () => {
 
       {/* -------- DEBUG -------- */}
       {activeTab === "debug" && (
-        <div className="card">
-          <h3 className="card-title"> Debug Tools</h3>
+        <div className="card club-pattern">
+          <h3 className="card-title">Debug Tools</h3>
           <QRDebugger />
         </div>
       )}
