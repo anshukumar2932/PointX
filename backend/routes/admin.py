@@ -146,43 +146,44 @@ def create_visitor():
 @require_auth(["admin"])
 def create_stall():
     """
-    Creates stall user + wallet + stall config
+    Creates stall (physical entity) without user
+    Stall = physical booth/game
+    Operator = user who operates the stall
     """
     data = request.json
-
-    hashed = bcrypt.hashpw(
-        data["password"].encode(),
-        bcrypt.gensalt()
-    ).decode()
-
-    user = safe_execute(
-        supabase.table("users").insert({
-            "username": data["username"],
-            "reg_no": data["username"],
-            "password_hash": hashed,
-            "passwd" : data["password"],
-            "role": "stall"
-        })
-    ).data[0]
-
+    
+    stall_name = data.get("stall_name")
+    price_per_play = data.get("price", 10)
+    
+    if not stall_name:
+        return jsonify({"error": "stall_name is required"}), 400
+    
+    # Create wallet for the stall (no user_id)
     wallet = safe_execute(
         supabase.table("wallets").insert({
-        "user_id": user["id"],
-        "username": data["username"],
-        "balance": 0
-    })
+            "username": stall_name,
+            "balance": 0,
+            "user_id": None  # Stall wallet not tied to user
+        })
     ).data[0]
-
+    
+    # Create stall
     stall = safe_execute(
-        supabase.table("stalls").insert({        
-        "user_id": user["id"],
-        "stall_name": data["username"],
-        "wallet_id": wallet["id"],
-        "price_per_play": data["price"]
-    })
+        supabase.table("stalls").insert({
+            "stall_name": stall_name,
+            "wallet_id": wallet["id"],
+            "price_per_play": price_per_play,
+            "user_id": None  # No user tied to stall
+        })
     ).data[0]
+    
+    return jsonify({
+        "stall_id": stall["id"],
+        "wallet_id": wallet["id"],
+        "stall_name": stall_name,
+        "price_per_play": price_per_play
+    }), 201
 
-    return jsonify({"stall_id": stall["id"]})
 
 
 @admin_bp.route("/bulk-users", methods=["POST"])
@@ -191,13 +192,20 @@ def create_stall():
 @admin_bp.response(200)
 def bulk_users():
     """
-    Docstring for bulk_users
+    Bulk create users with support for:
+    - visitors, operators, stalls (legacy), admins
+    - operator assignment to stalls via stall_name
+    - Note: Creating stalls via CSV is deprecated - use /create-stall instead
     """
 
     inp=request.get_json()
     users=[]
+    operator_assignments = []  # Track operator->stall assignments
+    
     if not inp:
         return jsonify({"error" : "Empty Bulk-Users" }),400
+    
+    # First pass: Create all users
     for data in inp:
         hashed = bcrypt.hashpw(
             data["password"].encode(),
@@ -214,39 +222,115 @@ def bulk_users():
             })
         ).data[0]
 
+        # Determine initial balance based on role
+        if user["role"] == "visitor":
+            balance = 100
+        elif user["role"] == "admin":
+            balance = 10000
+        else:
+            balance = 0  # operators and legacy stalls start with 0
+
         wallet = safe_execute(
             supabase.table("wallets").insert({
                 "user_id": user["id"],
-                "user_name": data["name"],
-                "balance": 100 if user["role"] == "visitor" else (10000 if user["role"] == "admin" else 0)
+                "username": data.get("name", data["username"]),
+                "balance": balance
             })
         ).data[0]
+        
+        user_result = {
+            "user_id": user["id"],
+            "user_name": user["username"],
+            "wallet_id": wallet["id"],
+            "user_password": user["passwd"],
+            "role": user["role"]
+        }
+        
+        # Handle legacy stall creation (deprecated)
         if user["role"]=="stall":
             stall = safe_execute(
                 supabase.table("stalls").insert({        
                 "user_id": user["id"],
                 "stall_name": data["username"],
                 "wallet_id": wallet["id"],
-                "price_per_play": data["price"]
+                "price_per_play": data.get("price", 10)
             })
             ).data[0]
-            users.append({
-            "user_id": user["id"],
-            "user_name": user["username"],
-            "wallet_id": wallet["id"],
-            "user_password": user["passwd"],
-            "stall_id": stall["id"]
-            })
-
-        else:
-            users.append({
-            "user_id": user["id"],
-            "user_name": user["username"],
-            "wallet_id": wallet["id"],
-            "user_password": user["passwd"]
-            })
+            user_result["stall_id"] = stall["id"]
+            user_result["note"] = "Legacy stall user created - consider using /create-stall instead"
         
-    return jsonify(users)
+        # Handle operator assignment to existing stall
+        if user["role"] == "operator":
+            stall_name = data.get("stall_name")
+            if stall_name:
+                operator_assignments.append({
+                    "user_id": user["id"],
+                    "username": user["username"],
+                    "stall_name": stall_name
+                })
+        
+        users.append(user_result)
+    
+    # Second pass: Assign operators to stalls
+    assignment_results = []
+    
+    # Handle operator -> stall assignments (operator has stall_name)
+    for assignment in operator_assignments:
+        try:
+            # Find stall by name
+            stall_res = safe_execute(
+                supabase.table("stalls")
+                .select("id")
+                .eq("stall_name", assignment["stall_name"])
+                .single()
+            )
+            
+            if stall_res.data:
+                # Check if operator is already assigned
+                existing = safe_execute(
+                    supabase.table("stall_operators")
+                    .select("id")
+                    .eq("user_id", assignment["user_id"])
+                )
+                
+                if not existing.data or len(existing.data) == 0:
+                    # Assign operator
+                    safe_execute(
+                        supabase.table("stall_operators").insert({
+                            "stall_id": stall_res.data["id"],
+                            "user_id": assignment["user_id"]
+                        })
+                    )
+                    assignment_results.append({
+                        "operator": assignment["username"],
+                        "stall": assignment["stall_name"],
+                        "status": "assigned"
+                    })
+                else:
+                    assignment_results.append({
+                        "operator": assignment["username"],
+                        "stall": assignment["stall_name"],
+                        "status": "already_assigned"
+                    })
+            else:
+                assignment_results.append({
+                    "operator": assignment["username"],
+                    "stall": assignment["stall_name"],
+                    "status": "stall_not_found"
+                })
+        except Exception as e:
+            assignment_results.append({
+                "operator": assignment["username"],
+                "stall": assignment["stall_name"],
+                "status": f"error: {str(e)}"
+            })
+    
+    response = {
+        "users": users,
+        "operator_assignments": assignment_results
+    }
+        
+    return jsonify(response)
 
 @admin_bp.route("/users" , methods=["GET"])
 @require_auth(["admin"])
@@ -672,3 +756,405 @@ def transactions():
     
     return jsonify(enhanced_transactions)
 
+@admin_bp.route("/assign-operator", methods=["POST"])
+@require_auth(["admin"])
+def assign_operator():
+    data = request.json
+    
+    stall_id = data.get("stall_id")
+    user_id = data.get("user_id")
+    
+    if not stall_id or not user_id:
+        return jsonify({"error": "stall_id and user_id are required"}), 400
+    
+    # Check if operator is already assigned to ANY stall
+    existing = safe_execute(
+        supabase.table("stall_operators")
+        .select("id, stall_id")
+        .eq("user_id", user_id)
+    )
+    
+    if existing.data and len(existing.data) > 0:
+        # Get the stall name they're already assigned to
+        existing_stall_id = existing.data[0]["stall_id"]
+        stall_res = safe_execute(
+            supabase.table("stalls")
+            .select("stall_name")
+            .eq("id", existing_stall_id)
+            .single()
+        )
+        stall_name = stall_res.data["stall_name"] if stall_res.data else "another stall"
+        return jsonify({
+            "error": f"Operator is already assigned to {stall_name}. Remove them first."
+        }), 400
+    
+    # Assign operator to stall
+    safe_execute(
+        supabase.table("stall_operators").insert({
+            "stall_id": stall_id,
+            "user_id": user_id
+        })
+    )
+
+    return jsonify({"success": True})
+
+@admin_bp.route("/remove-operator", methods=["POST"])
+@require_auth(["admin"])
+def remove_operator():
+    """Remove operator assignment from a stall"""
+    data = request.json
+    
+    stall_id = data.get("stall_id")
+    user_id = data.get("user_id")
+    
+    if not stall_id or not user_id:
+        return jsonify({"error": "stall_id and user_id are required"}), 400
+    
+    try:
+        # First, deactivate any active sessions for this operator
+        safe_execute(
+            supabase.table("stall_sessions")
+            .update({
+                "is_active": False,
+                "ended_at": "now()"
+            })
+            .eq("stall_id", stall_id)
+            .eq("user_id", user_id)
+            .eq("is_active", True)
+        )
+        
+        # Then remove the operator assignment
+        result = safe_execute(
+            supabase.table("stall_operators")
+            .delete()
+            .eq("stall_id", stall_id)
+            .eq("user_id", user_id)
+        )
+        
+        # Check if anything was deleted
+        if result.data is None or (isinstance(result.data, list) and len(result.data) == 0):
+            return jsonify({"error": "Operator assignment not found"}), 404
+        
+        return jsonify({"success": True, "message": "Operator removed from stall"})
+        
+    except Exception as e:
+        return jsonify({"error": f"Failed to remove operator: {str(e)}"}), 500
+
+@admin_bp.route("/activate-operator", methods=["POST"])
+@require_auth(["admin"])
+def activate_operator():
+    """Activate operator for a stall (creates active session)"""
+    data = request.json
+    stall_id = data.get("stall_id")
+    user_id = data.get("user_id")
+    
+    if not stall_id or not user_id:
+        return jsonify({"error": "stall_id and user_id are required"}), 400
+    
+    # Check if operator is assigned to stall
+    operator = safe_execute(
+        supabase.table("stall_operators")
+        .select("id")
+        .eq("stall_id", stall_id)
+        .eq("user_id", user_id)
+        .single()
+    )
+    
+    if not operator.data:
+        return jsonify({"error": "User not assigned to this stall"}), 400
+    
+    # Check if already active
+    existing_session = safe_execute(
+        supabase.table("stall_sessions")
+        .select("id")
+        .eq("stall_id", stall_id)
+        .eq("user_id", user_id)
+        .eq("is_active", True)
+    )
+    
+    if existing_session.data and len(existing_session.data) > 0:
+        return jsonify({"error": "Operator is already active"}), 400
+    
+    # Create active session
+    safe_execute(
+        supabase.table("stall_sessions")
+        .insert({
+            "stall_id": stall_id,
+            "user_id": user_id,
+            "is_active": True
+        })
+    )
+    
+    return jsonify({"success": True, "message": "Operator activated"})
+
+@admin_bp.route("/deactivate-operator", methods=["POST"])
+@require_auth(["admin"])
+def deactivate_operator():
+    """Deactivate operator for a stall (ends active session)"""
+    data = request.json
+    stall_id = data.get("stall_id")
+    user_id = data.get("user_id")
+    
+    if not stall_id or not user_id:
+        return jsonify({"error": "stall_id and user_id are required"}), 400
+    
+    # End active session
+    result = safe_execute(
+        supabase.table("stall_sessions")
+        .update({
+            "is_active": False,
+            "ended_at": "now()"
+        })
+        .eq("stall_id", stall_id)
+        .eq("user_id", user_id)
+        .eq("is_active", True)
+    )
+    
+    if not result.data or len(result.data) == 0:
+        return jsonify({"error": "No active session found"}), 404
+    
+    return jsonify({"success": True, "message": "Operator deactivated"})
+
+@admin_bp.route("/stalls", methods=["GET"])
+@require_auth(["admin"])
+def get_stalls():
+    """Get all stalls with operator information"""
+    # Get all stalls
+    stalls_res = safe_execute(
+        supabase.table("stalls")
+        .select("id, stall_name, price_per_play, wallet_id, created_at")
+    )
+    
+    stalls = stalls_res.data or []
+    
+    # Get all stall operators
+    operators_res = safe_execute(
+        supabase.table("stall_operators")
+        .select("stall_id, user_id, created_at")
+    )
+    
+    # Get active sessions
+    sessions_res = safe_execute(
+        supabase.table("stall_sessions")
+        .select("stall_id, user_id, started_at")
+        .eq("is_active", True)
+    )
+    
+    # Build active operators map by stall
+    active_by_stall = {}
+    for s in (sessions_res.data or []):
+        stall_id = s["stall_id"]
+        if stall_id not in active_by_stall:
+            active_by_stall[stall_id] = []
+        active_by_stall[stall_id].append(s["user_id"])
+    
+    # Get user info for all operators
+    user_ids = set()
+    for op in (operators_res.data or []):
+        user_ids.add(op["user_id"])
+    
+    users_map = {}
+    if user_ids:
+        users_res = safe_execute(
+            supabase.table("users")
+            .select("id, username, role")
+            .in_("id", list(user_ids))
+        )
+        users_map = {u["id"]: u for u in (users_res.data or [])}
+    
+    # Get wallet balances
+    wallet_ids = [s["wallet_id"] for s in stalls if s.get("wallet_id")]
+    wallets_map = {}
+    if wallet_ids:
+        wallets_res = safe_execute(
+            supabase.table("wallets")
+            .select("id, balance")
+            .in_("id", wallet_ids)
+        )
+        wallets_map = {w["id"]: w for w in (wallets_res.data or [])}
+    
+    # Build operator map by stall
+    operators_by_stall = {}
+    for op in (operators_res.data or []):
+        stall_id = op["stall_id"]
+        if stall_id not in operators_by_stall:
+            operators_by_stall[stall_id] = []
+        
+        user = users_map.get(op["user_id"])
+        if user:
+            is_active = op["user_id"] in active_by_stall.get(stall_id, [])
+            operators_by_stall[stall_id].append({
+                "user_id": op["user_id"],
+                "username": user["username"],
+                "assigned_at": op["created_at"],
+                "is_active": is_active
+            })
+    
+    # Enrich stalls with operator info
+    enriched_stalls = []
+    for stall in stalls:
+        wallet = wallets_map.get(stall["wallet_id"])
+        
+        # Get active operator usernames
+        active_operator_ids = active_by_stall.get(stall["id"], [])
+        active_operators = [
+            users_map[uid]["username"] 
+            for uid in active_operator_ids 
+            if uid in users_map
+        ]
+        
+        enriched_stalls.append({
+            **stall,
+            "balance": wallet["balance"] if wallet else 0,
+            "operators": operators_by_stall.get(stall["id"], []),
+            "active_operators": active_operators,
+            "active_operator_count": len(active_operators)
+        })
+    
+    return jsonify(enriched_stalls)
+
+@admin_bp.route("/search-operators", methods=["GET"])
+@require_auth(["admin"])
+def search_operators():
+    """
+    Search for operators (users with role 'operator')
+    Query param: q (search term)
+    Returns: List of operators with assignment status
+    """
+    q = request.args.get("q", "")
+    
+    # Search operators
+    query = supabase.table("users").select("id, username, created_at").eq("role", "operator")
+    
+    if q:
+        query = query.ilike("username", f"%{q}%")
+    
+    res = safe_execute(query.limit(20))
+    operators = res.data or []
+    
+    # Get assignment info for each operator
+    operator_ids = [op["id"] for op in operators]
+    
+    assignments_map = {}
+    if operator_ids:
+        # Get stall assignments
+        assignments_res = safe_execute(
+            supabase.table("stall_operators")
+            .select("user_id, stall_id, stalls(stall_name)")
+            .in_("user_id", operator_ids)
+        )
+        
+        for assignment in (assignments_res.data or []):
+            user_id = assignment["user_id"]
+            if user_id not in assignments_map:
+                assignments_map[user_id] = []
+            assignments_map[user_id].append({
+                "stall_id": assignment["stall_id"],
+                "stall_name": assignment["stalls"]["stall_name"] if assignment.get("stalls") else "Unknown"
+            })
+        
+        # Get active sessions
+        sessions_res = safe_execute(
+            supabase.table("stall_sessions")
+            .select("user_id, stall_id")
+            .in_("user_id", operator_ids)
+            .eq("is_active", True)
+        )
+        
+        active_sessions = {}
+        for session in (sessions_res.data or []):
+            user_id = session["user_id"]
+            if user_id not in active_sessions:
+                active_sessions[user_id] = []
+            active_sessions[user_id].append(session["stall_id"])
+    
+    # Enrich operators with assignment info
+    enriched_operators = []
+    for op in operators:
+        assignments = assignments_map.get(op["id"], [])
+        active_stall_ids = active_sessions.get(op["id"], []) if operator_ids else []
+        
+        enriched_operators.append({
+            **op,
+            "assigned_stalls": assignments,
+            "is_assigned": len(assignments) > 0,
+            "is_active": len(active_stall_ids) > 0,
+            "active_stall_count": len(active_stall_ids)
+        })
+    
+    return jsonify(enriched_operators)
+
+@admin_bp.route("/search-stalls", methods=["GET"])
+@require_auth(["admin"])
+def search_stalls():
+    """
+    Search for stalls
+    Query param: q (search term)
+    Returns: List of stalls with operator info
+    """
+    q = request.args.get("q", "")
+    
+    # Search stalls
+    query = supabase.table("stalls").select("id, stall_name, price_per_play, wallet_id, created_at")
+    
+    if q:
+        query = query.ilike("stall_name", f"%{q}%")
+    
+    res = safe_execute(query.limit(20))
+    stalls = res.data or []
+    
+    # Get operator info for each stall
+    stall_ids = [s["id"] for s in stalls]
+    
+    operators_map = {}
+    active_operators_map = {}
+    
+    if stall_ids:
+        # Get assigned operators
+        operators_res = safe_execute(
+            supabase.table("stall_operators")
+            .select("stall_id, user_id, users(username)")
+            .in_("stall_id", stall_ids)
+        )
+        
+        for op in (operators_res.data or []):
+            stall_id = op["stall_id"]
+            if stall_id not in operators_map:
+                operators_map[stall_id] = []
+            operators_map[stall_id].append({
+                "user_id": op["user_id"],
+                "username": op["users"]["username"] if op.get("users") else "Unknown"
+            })
+        
+        # Get active operators
+        sessions_res = safe_execute(
+            supabase.table("stall_sessions")
+            .select("stall_id, user_id, users(username)")
+            .in_("stall_id", stall_ids)
+            .eq("is_active", True)
+        )
+        
+        for session in (sessions_res.data or []):
+            stall_id = session["stall_id"]
+            if stall_id not in active_operators_map:
+                active_operators_map[stall_id] = []
+            active_operators_map[stall_id].append({
+                "user_id": session["user_id"],
+                "username": session["users"]["username"] if session.get("users") else "Unknown"
+            })
+    
+    # Enrich stalls with operator info
+    enriched_stalls = []
+    for stall in stalls:
+        operators = operators_map.get(stall["id"], [])
+        active_operators = active_operators_map.get(stall["id"], [])
+        
+        enriched_stalls.append({
+            **stall,
+            "assigned_operators": operators,
+            "active_operators": active_operators,
+            "operator_count": len(operators),
+            "active_operator_count": len(active_operators)
+        })
+    
+    return jsonify(enriched_stalls)

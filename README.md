@@ -136,11 +136,27 @@ REACT_APP_API_BASE_URL=https://your-backend-url.com/api
 
 ### CSV Format
 ```csv
-username,password,role,name,price
-visitor1,password123,visitor,John Doe,
-stall1,stallpass123,stall,Game Stall 1,15
-admin2,adminpass123,admin,Admin User,
+username,password,role,name,price,stall_name
+visitor1,password123,visitor,John Doe,,
+operator1,oppass123,operator,Operator One,,Game Stall 1
+operator2,oppass456,operator,Operator Two,,
+admin2,adminpass123,admin,Admin User,,
 ```
+
+**Columns:**
+- `username` (required): Unique username for login
+- `password` (required): User password (min 6 characters)
+- `role` (required): visitor, operator, or admin
+- `name` (optional): Display name
+- `price` (optional): Deprecated - not used
+- `stall_name` (optional): For operators - assign to existing stall by name
+
+**Architecture Notes:**
+- Stalls are physical entities (booths/games) created separately via "Create Stall" tab
+- Operators are users who operate stalls
+- One operator can be assigned to multiple stalls
+- Admins activate/deactivate operators for specific stalls via sessions
+- Create stalls first, then create operators and assign them to stalls
 
 ## API Endpoints
 
@@ -231,7 +247,16 @@ For support and questions:
 
 ## Version History
 
-### v2.0.0 (February 10, 2026) - Latest
+### v2.1.0 (February 24, 2026) - Latest
+- **Multi-Staff Architecture**: Complete separation of stalls (physical entities) from operators (users)
+- **Operator Management**: Operators can be assigned to multiple stalls with session-based activation
+- **Enhanced Admin APIs**: Added search endpoints for operators and stalls with real-time status
+- **Stall Dashboard Updates**: Operators can view and select from multiple active stalls
+- **CSV Improvements**: Updated bulk user creation to support operator role and stall assignments
+- **API Enhancements**: New `/my-active-stalls` endpoint for operators to see their active assignments
+- **Architecture Cleanup**: Removed legacy stall user creation, stalls now created independently
+
+### v2.0.0 (February 10, 2026)
 - **Added Club House Theme**: Complete UI redesign with clubhouse-inspired aesthetics
 - **Google Authentication**: Integrated Google OAuth login functionality
 - **Performance Improvements**: Increased timeout settings and optimized admin dashboard

@@ -18,6 +18,11 @@ import {
   approveTopup,
   getLeaderboard,
   markAttendance,
+  getStalls,
+  assignOperator,
+  removeOperator,
+  activateOperator,
+  deactivateOperator,
 } from "../api/admin";
 
 const AdminDashboard = () => {
@@ -38,6 +43,7 @@ const AdminDashboard = () => {
   const [plays, setPlays] = useState([]);
   const [topupRequests, setTopupRequests] = useState([]);
   const [leaderboard, setLeaderboard] = useState([]);
+  const [stalls, setStalls] = useState([]);
 
   // Filters
   const [userSearch, setUserSearch] = useState("");
@@ -51,9 +57,12 @@ const AdminDashboard = () => {
   });
 
   const [newStall, setNewStall] = useState({
+    stall_name: "",
+    price: 10,
+    mode: "simple", // "simple" or "full"
     username: "",
     password: "",
-    price: 10,
+    initial_operator_id: "",
   });
 
   const [topupData, setTopupData] = useState({
@@ -77,6 +86,12 @@ const AdminDashboard = () => {
 
   const [qrInput, setQrInput] = useState("");
   const [qrScanResult, setQrScanResult] = useState(null);
+
+  // Operator Management
+  const [operatorForm, setOperatorForm] = useState({
+    stall_id: "",
+    user_id: "",
+  });
 
   // ────────────────────────────────────────────────
   // Data Loading
@@ -143,6 +158,21 @@ const AdminDashboard = () => {
         const res = await getLeaderboard();
         setLeaderboard(res.data || []);
         loadedData.leaderboard = res.data || [];
+      }
+
+      if (activeTab === "operators") {
+        const res = await getStalls();
+        console.log("🔍 Stalls data received:", res.data);
+        
+        // Debug: Check active operators
+        res.data?.forEach(stall => {
+          console.log(`Stall: ${stall.stall_name}`);
+          console.log(`  Active Operators (${stall.active_operator_count}):`, stall.active_operators);
+          console.log(`  All Operators:`, stall.operators);
+        });
+        
+        setStalls(res.data || []);
+        loadedData.stalls = res.data || [];
       }
 
       // Cache the loaded data
@@ -277,8 +307,29 @@ const AdminDashboard = () => {
 
   const handleCreateStall = (e) => {
     e.preventDefault();
-    runAction(() => createStall(newStall), "Stall created");
-    setNewStall({ username: "", password: "", price: 10 });
+    
+    const payload = {
+      stall_name: newStall.stall_name,
+      price: newStall.price,
+      create_user: newStall.mode === "full",
+    };
+    
+    if (newStall.mode === "full") {
+      payload.username = newStall.username;
+      payload.password = newStall.password;
+    } else if (newStall.initial_operator_id) {
+      payload.initial_operator_id = newStall.initial_operator_id;
+    }
+    
+    runAction(() => createStall(payload), "Stall created successfully");
+    setNewStall({ 
+      stall_name: "", 
+      price: 10, 
+      mode: "simple",
+      username: "",
+      password: "",
+      initial_operator_id: "",
+    });
   };
 
   const handleTopup = (e) => {
@@ -383,7 +434,7 @@ const AdminDashboard = () => {
     }
     
     // Role validation
-    const validRoles = ['visitor', 'stall', 'admin'];
+    const validRoles = ['visitor', 'operator', 'stall', 'admin'];
     if (user.role && !validRoles.includes(user.role.toLowerCase())) {
       errors.push(`Row ${rowIndex + 2}: Invalid role "${user.role}". Must be: ${validRoles.join(', ')}`);
     }
@@ -399,8 +450,15 @@ const AdminDashboard = () => {
     }
     
     // Stall-specific validation
-    if (user.role === 'stall' && user.price && (isNaN(user.price) || user.price < 1)) {
-      errors.push(`Row ${rowIndex + 2}: Stall price must be a number >= 1`);
+    if (user.role === 'stall') {
+      if (user.price && (isNaN(user.price) || user.price < 1)) {
+        errors.push(`Row ${rowIndex + 2}: Stall price must be a number >= 1`);
+      }
+    }
+    
+    // Operator-specific validation
+    if (user.role === 'operator' && user.stall_name && user.stall_name.trim() === '') {
+      errors.push(`Row ${rowIndex + 2}: Operator stall_name cannot be empty if provided`);
     }
     
     return errors;
@@ -417,7 +475,8 @@ const AdminDashboard = () => {
         password: row.password?.trim(),
         role: row.role?.trim().toLowerCase(),
         name: row.name?.trim() || null,
-        price: row.price ? parseInt(row.price) : (row.role?.toLowerCase() === 'stall' ? 10 : undefined)
+        price: row.price ? parseInt(row.price) : undefined,
+        stall_name: row.stall_name?.trim() || null  // For operator assignment
       };
       
       const errors = validateUserData(user, index);
@@ -482,11 +541,11 @@ const AdminDashboard = () => {
 
   const downloadSampleCSV = () => {
     const sampleData = [
-      { username: 'visitor1', password: 'password123', role: 'visitor', name: 'John Doe', price: '' },
-      { username: 'visitor2', password: 'password456', role: 'visitor', name: 'Jane Smith', price: '' },
-      { username: 'stall1', password: 'stallpass123', role: 'stall', name: 'Game Stall 1', price: '15' },
-      { username: 'stall2', password: 'stallpass456', role: 'stall', name: 'Game Stall 2', price: '20' },
-      { username: 'admin2', password: 'adminpass123', role: 'admin', name: 'Admin User', price: '' }
+      { username: 'visitor1', password: 'password123', role: 'visitor', name: 'John Doe', price: '', stall_name: '' },
+      { username: 'visitor2', password: 'password456', role: 'visitor', name: 'Jane Smith', price: '', stall_name: '' },
+      { username: 'operator1', password: 'oppass123', role: 'operator', name: 'Operator One', price: '', stall_name: 'Game Stall 1' },
+      { username: 'operator2', password: 'oppass456', role: 'operator', name: 'Operator Two', price: '', stall_name: '' },
+      { username: 'admin2', password: 'adminpass123', role: 'admin', name: 'Admin User', price: '', stall_name: '' }
     ];
     
     const csv = Papa.unparse(sampleData);
@@ -512,13 +571,30 @@ const AdminDashboard = () => {
       
       // Show detailed results
       let message = `✅ Bulk Upload Complete!\n\n`;
-      message += `✓ Successfully created: ${result.created_count} users\n`;
       
-      if (result.error_count > 0) {
-        message += `⚠️ Errors encountered: ${result.error_count}\n\n`;
-        message += `Errors:\n${result.errors.slice(0, 5).join('\n')}`;
-        if (result.errors.length > 5) {
-          message += `\n... and ${result.errors.length - 5} more errors`;
+      // Handle new response format
+      if (result.users) {
+        message += `✓ Successfully created: ${result.users.length} users\n`;
+        
+        // Show operator assignment results
+        if (result.operator_assignments && result.operator_assignments.length > 0) {
+          message += `\n📋 Operator Assignments:\n`;
+          result.operator_assignments.forEach(assignment => {
+            const statusIcon = assignment.status === 'assigned' ? '✓' : 
+                              assignment.status === 'already_assigned' ? '⚠️' : '❌';
+            message += `${statusIcon} ${assignment.operator} → ${assignment.stall} (${assignment.status})\n`;
+          });
+        }
+      } else {
+        // Legacy format support
+        message += `✓ Successfully created: ${result.created_count || result.length} users\n`;
+        
+        if (result.error_count > 0) {
+          message += `⚠️ Errors encountered: ${result.error_count}\n\n`;
+          message += `Errors:\n${result.errors.slice(0, 5).join('\n')}`;
+          if (result.errors.length > 5) {
+            message += `\n... and ${result.errors.length - 5} more errors`;
+          }
         }
       }
       
@@ -567,6 +643,42 @@ const AdminDashboard = () => {
     }
   };
 
+  const handleAssignOperator = (e) => {
+    e.preventDefault();
+    if (!operatorForm.stall_id || !operatorForm.user_id) {
+      alert("Please select both stall and user");
+      return;
+    }
+    runAction(
+      () => assignOperator(operatorForm),
+      "Operator assigned successfully"
+    );
+    setOperatorForm({ stall_id: "", user_id: "" });
+  };
+
+  const handleActivateOperator = (stallId, userId) => {
+    runAction(
+      () => activateOperator({ stall_id: stallId, user_id: userId }),
+      "Operator activated"
+    );
+  };
+
+  const handleDeactivateOperator = (stallId, userId, username) => {
+    if (!window.confirm(`Deactivate ${username}?`)) return;
+    runAction(
+      () => deactivateOperator({ stall_id: stallId, user_id: userId }),
+      "Operator deactivated"
+    );
+  };
+
+  const handleRemoveOperator = (stallId, userId, username) => {
+    if (!window.confirm(`Remove ${username} from this stall?`)) return;
+    runAction(
+      () => removeOperator({ stall_id: stallId, user_id: userId }),
+      "Operator removed from stall"
+    );
+  };
+
   const filteredUsers = users.filter(u =>
     (u.username || "").toLowerCase().includes(userSearch.toLowerCase()) ||
     (u.role || "").toLowerCase().includes(userSearch.toLowerCase())
@@ -603,7 +715,7 @@ const AdminDashboard = () => {
       </div>
 
       <div className="tab-nav">
-        {["overview", "users", "wallets", "attendance", "plays", "topups", "leaderboard", "create", "qr-debug"].map(tab => (
+        {["overview", "users", "wallets", "operators", "attendance", "plays", "topups", "leaderboard", "create", "qr-debug"].map(tab => (
           <button
             key={tab}
             className={`tab-button ${activeTab === tab ? "active" : ""}`}
@@ -897,6 +1009,252 @@ const AdminDashboard = () => {
       )}
 
       {/* ──────────────────────────────────────────────── */}
+      {/* OPERATORS */}
+      {/* ──────────────────────────────────────────────── */}
+      {activeTab === "operators" && (
+        <div className="grid grid-2">
+          {/* Assign Operator Form */}
+          <div className="card club-pattern">
+            <h3 className="card-title">Assign Operator to Stall</h3>
+            <form onSubmit={handleAssignOperator}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
+                Select Stall:
+              </label>
+              <select
+                className="input"
+                value={operatorForm.stall_id}
+                onChange={e => setOperatorForm({ ...operatorForm, stall_id: e.target.value })}
+                disabled={isBusy}
+                required
+              >
+                <option value="">-- Choose Stall --</option>
+                {stalls.map(s => (
+                  <option key={s.id} value={s.id}>
+                    {s.stall_name} (₹{s.price_per_play}/play)
+                  </option>
+                ))}
+              </select>
+
+              <label style={{ display: 'block', marginTop: '16px', marginBottom: '8px', fontWeight: 'bold' }}>
+                Select User (Available Operators):
+              </label>
+              <select
+                className="input"
+                value={operatorForm.user_id}
+                onChange={e => setOperatorForm({ ...operatorForm, user_id: e.target.value })}
+                disabled={isBusy}
+                required
+              >
+                <option value="">-- Choose User --</option>
+                {users
+                  .filter(u => {
+                    // Only show stall users who are NOT already assigned to any stall
+                    if (u.role !== 'stall') return false;
+                    
+                    // Check if this user is already assigned to any stall
+                    const isAssigned = stalls.some(stall => 
+                      stall.operators && stall.operators.some(op => op.user_id === u.id)
+                    );
+                    
+                    return !isAssigned;
+                  })
+                  .map(u => (
+                    <option key={u.id} value={u.id}>
+                      {u.username}
+                    </option>
+                  ))}
+              </select>
+
+              {users.filter(u => u.role === 'stall').length === 0 && (
+                <div style={{
+                  marginTop: '12px',
+                  padding: '12px',
+                  backgroundColor: '#fef2f2',
+                  border: '1px solid #fecaca',
+                  borderRadius: '6px',
+                  fontSize: '13px',
+                  color: '#991b1b'
+                }}>
+                  ⚠️ No stall users found. Create stall users first in the "Create" tab.
+                </div>
+              )}
+
+              {users.filter(u => {
+                if (u.role !== 'stall') return false;
+                const isAssigned = stalls.some(stall => 
+                  stall.operators && stall.operators.some(op => op.user_id === u.id)
+                );
+                return !isAssigned;
+              }).length === 0 && users.filter(u => u.role === 'stall').length > 0 && (
+                <div style={{
+                  marginTop: '12px',
+                  padding: '12px',
+                  backgroundColor: '#fffbeb',
+                  border: '1px solid #fbbf24',
+                  borderRadius: '6px',
+                  fontSize: '13px',
+                  color: '#92400e'
+                }}>
+                  ℹ️ All stall users are already assigned. Remove an operator from a stall to reassign them.
+                </div>
+              )}
+
+              <button className="btn btn-full mt-md" type="submit" disabled={isBusy}>
+                {actionLoading ? "Assigning..." : "Assign Operator"}
+              </button>
+            </form>
+
+            <div style={{
+              marginTop: '20px',
+              padding: '12px',
+              backgroundColor: '#f0f9ff',
+              border: '1px solid #0ea5e9',
+              borderRadius: '6px',
+              fontSize: '13px'
+            }}>
+              <h4 style={{ margin: '0 0 8px 0', color: '#0369a1' }}>ℹ️ How It Works</h4>
+              <ul style={{ margin: '0', paddingLeft: '20px' }}>
+                <li><strong>One operator → One stall</strong> (exclusive assignment)</li>
+                <li><strong>One stall → Many operators</strong> (multiple staff)</li>
+                <li><strong>Multiple operators can be active</strong> simultaneously</li>
+                <li>Only active operators can start games</li>
+                <li>Admin controls activation/deactivation</li>
+              </ul>
+            </div>
+          </div>
+
+          {/* Stalls List with Operators */}
+          <div className="card club-pattern">
+            <h3 className="card-title">Stalls & Operators</h3>
+            {stalls.length === 0 ? (
+              <p style={{ textAlign: 'center', color: '#6b7280', padding: '20px' }}>
+                No stalls created yet
+              </p>
+            ) : (
+              <div style={{ maxHeight: '600px', overflowY: 'auto' }}>
+                {stalls.map(stall => (
+                  <div
+                    key={stall.id}
+                    style={{
+                      marginBottom: '16px',
+                      padding: '16px',
+                      border: '2px solid #e5e7eb',
+                      borderRadius: '8px',
+                      backgroundColor: '#ffffff'
+                    }}
+                  >
+                    <div style={{ marginBottom: '12px' }}>
+                      <h4 style={{ margin: '0 0 4px 0', fontSize: '18px', color: '#1f2937' }}>
+                        {stall.stall_name}
+                      </h4>
+                      <div style={{ fontSize: '13px', color: '#6b7280' }}>
+                        Price: ₹{stall.price_per_play}/play | Balance: {stall.balance} pts
+                      </div>
+                    </div>
+
+                    {stall.active_operators && stall.active_operators.length > 0 && (
+                      <div style={{
+                        padding: '8px 12px',
+                        backgroundColor: '#dcfce7',
+                        border: '1px solid #22c55e',
+                        borderRadius: '4px',
+                        marginBottom: '12px',
+                        fontSize: '13px'
+                      }}>
+                        <strong style={{ color: '#15803d' }}>
+                          🟢 Active Operators ({stall.active_operators.length}):
+                        </strong>{' '}
+                        <span style={{ color: '#166534' }}>
+                          {stall.active_operators.join(', ')}
+                        </span>
+                      </div>
+                    )}
+
+                    {stall.operators && stall.operators.length > 0 ? (
+                      <div>
+                        <div style={{ fontSize: '13px', fontWeight: 'bold', marginBottom: '8px', color: '#374151' }}>
+                          Assigned Operators ({stall.operators.length}):
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                          {stall.operators.map(op => (
+                            <div
+                              key={op.user_id}
+                              style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                padding: '8px 12px',
+                                backgroundColor: op.is_active ? '#f0fdf4' : '#f9fafb',
+                                border: op.is_active ? '1px solid #22c55e' : '1px solid #e5e7eb',
+                                borderRadius: '4px',
+                                fontSize: '13px'
+                              }}
+                            >
+                              <div>
+                                <strong>{op.username}</strong>
+                                {op.is_active && (
+                                  <span
+                                    className="badge badge-success"
+                                    style={{ marginLeft: '8px', fontSize: '10px' }}
+                                  >
+                                    ACTIVE
+                                  </span>
+                                )}
+                              </div>
+                              <div style={{ display: 'flex', gap: '6px' }}>
+                                {!op.is_active ? (
+                                  <button
+                                    className="btn btn-success btn-sm"
+                                    onClick={() => handleActivateOperator(stall.id, op.user_id)}
+                                    disabled={isBusy}
+                                    style={{ fontSize: '11px', padding: '4px 12px' }}
+                                  >
+                                    Activate
+                                  </button>
+                                ) : (
+                                  <button
+                                    className="btn btn-secondary btn-sm"
+                                    onClick={() => handleDeactivateOperator(stall.id, op.user_id, op.username)}
+                                    disabled={isBusy}
+                                    style={{ fontSize: '11px', padding: '4px 12px' }}
+                                  >
+                                    Deactivate
+                                  </button>
+                                )}
+                                <button
+                                  className="btn btn-danger btn-sm"
+                                  onClick={() => handleRemoveOperator(stall.id, op.user_id, op.username)}
+                                  disabled={isBusy}
+                                  style={{ fontSize: '11px', padding: '4px 12px' }}
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{
+                        padding: '12px',
+                        backgroundColor: '#fef2f2',
+                        border: '1px solid #fecaca',
+                        borderRadius: '4px',
+                        fontSize: '13px',
+                        color: '#991b1b'
+                      }}>
+                        ⚠️ No operators assigned yet
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ──────────────────────────────────────────────── */}
       {/* ATTENDANCE – with camera scanner */}
       {/* ──────────────────────────────────────────────── */}
       {activeTab === "attendance" && (
@@ -993,11 +1351,132 @@ const AdminDashboard = () => {
 
           <div className="card club-pattern">
             <h3 className="card-title">Create Stall</h3>
+            
+            <div style={{
+              marginBottom: '16px',
+              padding: '12px',
+              backgroundColor: '#f0f9ff',
+              border: '1px solid #0ea5e9',
+              borderRadius: '6px',
+              fontSize: '13px'
+            }}>
+              <strong style={{ color: '#0369a1' }}>💡 Two Creation Modes:</strong>
+              <ul style={{ margin: '8px 0 0 0', paddingLeft: '20px' }}>
+                <li><strong>Simple:</strong> Create stall only, assign existing operators later</li>
+                <li><strong>Full:</strong> Create stall + new operator user (legacy)</li>
+              </ul>
+            </div>
+            
             <form onSubmit={handleCreateStall}>
-              <input className="input" placeholder="Username" value={newStall.username} onChange={e => setNewStall({...newStall, username: e.target.value})} disabled={isBusy} required />
-              <input className="input" type="password" placeholder="Password" value={newStall.password} onChange={e => setNewStall({...newStall, password: e.target.value})} disabled={isBusy} required />
-              <input className="input" type="number" placeholder="Price per play" value={newStall.price} onChange={e => setNewStall({...newStall, price: Number(e.target.value)||10})} disabled={isBusy} min="1" />
-              <button className="btn btn-full" type="submit" disabled={isBusy}>
+              {/* Mode Selection */}
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
+                Creation Mode:
+              </label>
+              <select 
+                className="input" 
+                value={newStall.mode} 
+                onChange={e => setNewStall({...newStall, mode: e.target.value})} 
+                disabled={isBusy}
+                style={{ marginBottom: '16px' }}
+              >
+                <option value="simple">Simple (Recommended)</option>
+                <option value="full">Full (Create with User)</option>
+              </select>
+
+              {/* Common Fields */}
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
+                Stall Name:
+              </label>
+              <input 
+                className="input" 
+                placeholder="e.g., Ring Toss Game" 
+                value={newStall.stall_name} 
+                onChange={e => setNewStall({...newStall, stall_name: e.target.value})} 
+                disabled={isBusy} 
+                required 
+              />
+
+              <label style={{ display: 'block', marginTop: '12px', marginBottom: '8px', fontWeight: 'bold' }}>
+                Price per Play:
+              </label>
+              <input 
+                className="input" 
+                type="number" 
+                placeholder="10" 
+                value={newStall.price} 
+                onChange={e => setNewStall({...newStall, price: Number(e.target.value)||10})} 
+                disabled={isBusy} 
+                min="1" 
+              />
+
+              {/* Simple Mode: Optional Initial Operator */}
+              {newStall.mode === "simple" && (
+                <>
+                  <label style={{ display: 'block', marginTop: '12px', marginBottom: '8px', fontWeight: 'bold' }}>
+                    Initial Operator (Optional):
+                  </label>
+                  <select 
+                    className="input" 
+                    value={newStall.initial_operator_id} 
+                    onChange={e => setNewStall({...newStall, initial_operator_id: e.target.value})} 
+                    disabled={isBusy}
+                  >
+                    <option value="">-- Assign Later --</option>
+                    {users
+                      .filter(u => {
+                        // Only show unassigned stall users
+                        if (u.role !== 'stall') return false;
+                        const isAssigned = stalls.some(stall => 
+                          stall.operators && stall.operators.some(op => op.user_id === u.id)
+                        );
+                        return !isAssigned;
+                      })
+                      .map(u => (
+                        <option key={u.id} value={u.id}>
+                          {u.username}
+                        </option>
+                      ))}
+                  </select>
+                  <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
+                    You can assign operators later in the Operators tab
+                  </div>
+                </>
+              )}
+
+              {/* Full Mode: User Creation Fields */}
+              {newStall.mode === "full" && (
+                <>
+                  <label style={{ display: 'block', marginTop: '12px', marginBottom: '8px', fontWeight: 'bold' }}>
+                    Operator Username:
+                  </label>
+                  <input 
+                    className="input" 
+                    placeholder="operator_username" 
+                    value={newStall.username} 
+                    onChange={e => setNewStall({...newStall, username: e.target.value})} 
+                    disabled={isBusy} 
+                    required={newStall.mode === "full"}
+                  />
+
+                  <label style={{ display: 'block', marginTop: '12px', marginBottom: '8px', fontWeight: 'bold' }}>
+                    Operator Password:
+                  </label>
+                  <input 
+                    className="input" 
+                    type="password" 
+                    placeholder="password" 
+                    value={newStall.password} 
+                    onChange={e => setNewStall({...newStall, password: e.target.value})} 
+                    disabled={isBusy} 
+                    required={newStall.mode === "full"}
+                  />
+                  <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
+                    Creates a new stall user and auto-assigns as operator
+                  </div>
+                </>
+              )}
+
+              <button className="btn btn-full mt-md" type="submit" disabled={isBusy}>
                 {actionLoading ? "Creating..." : "Create Stall"}
               </button>
             </form>
@@ -1025,10 +1504,11 @@ const AdminDashboard = () => {
                 border: '1px solid #e0e7ff'
               }}>
                 <strong>Required:</strong> username, password, role<br/>
-                <strong>Optional:</strong> name, price (for stalls only)
+                <strong>Optional:</strong> name, stall_name (for operators - assign to existing stall)
               </div>
               <p style={{ margin: '8px 0 0 0', color: '#0369a1' }}>
-                <strong>Roles:</strong> visitor, stall, admin
+                <strong>Roles:</strong> visitor, operator, admin<br/>
+                <strong>Note:</strong> Create stalls separately using "Create Stall" tab. Use stall_name to assign operators to existing stalls.
               </p>
             </div>
 
@@ -1060,11 +1540,11 @@ const AdminDashboard = () => {
                 <textarea
                   className="input"
                   rows={8}
-                  placeholder={`username,password,role,name,price
-visitor1,pass123,visitor,John Doe,
-visitor2,pass456,visitor,Jane Smith,
-stall1,stallpass,stall,Game Stall 1,15
-admin2,adminpass,admin,Admin User,`}
+                  placeholder={`username,password,role,name,price,stall_name
+visitor1,pass123,visitor,John Doe,,
+operator1,oppass,operator,Operator One,,Game Stall 1
+operator2,oppass2,operator,Operator Two,,
+admin2,adminpass,admin,Admin User,,`}
                   value={bulkTextInput}
                   onChange={(e) => setBulkTextInput(e.target.value)}
                   disabled={isBusy}

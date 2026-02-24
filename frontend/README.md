@@ -536,7 +536,16 @@ getTTFB(console.log);
 
 ## Version History
 
-### v2.0.0 (February 10, 2026) - Latest
+### v2.1.0 (February 24, 2026) - Latest
+- **Multi-Staff Architecture**: Complete separation of stalls (physical entities) from operators (users)
+- **Operator Management**: Operators can be assigned to multiple stalls with session-based activation
+- **Enhanced Admin APIs**: Added search endpoints for operators and stalls with real-time status
+- **Stall Dashboard Updates**: Operators can view and select from multiple active stalls
+- **CSV Improvements**: Updated bulk user creation to support operator role and stall assignments
+- **API Enhancements**: New `/my-active-stalls` endpoint for operators to see their active assignments
+- **Architecture Cleanup**: Removed legacy stall user creation, stalls now created independently
+
+### v2.0.0 (February 10, 2026)
 - Added Club House Theme with custom styling
 - Google Authentication integration
 - Performance improvements and timeout optimizations

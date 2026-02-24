@@ -114,3 +114,47 @@ export const getLeaderboard = () => {
 export const getWallets = () => api.get("/admin/wallets");
 
 export const getTransactions = () => api.get("/admin/transactions");
+
+/* =====================================================
+   👥 STALL OPERATORS
+===================================================== */
+
+/**
+ * Assign operator to stall
+ * POST /api/admin/assign-operator
+ */
+export const assignOperator = (data) => {
+  return api.post("/admin/assign-operator", data);
+};
+
+/**
+ * Remove operator from stall
+ * POST /api/admin/remove-operator
+ */
+export const removeOperator = (data) => {
+  return api.post("/admin/remove-operator", data);
+};
+
+/**
+ * Activate operator for a stall (create active session)
+ * POST /api/admin/activate-operator
+ */
+export const activateOperator = (data) => {
+  return api.post("/admin/activate-operator", data);
+};
+
+/**
+ * Deactivate operator for a stall (end active session)
+ * POST /api/admin/deactivate-operator
+ */
+export const deactivateOperator = (data) => {
+  return api.post("/admin/deactivate-operator", data);
+};
+
+/**
+ * Get all stalls with operator info
+ * GET /api/admin/stalls
+ */
+export const getStalls = () => {
+  return api.get("/admin/stalls");
+};

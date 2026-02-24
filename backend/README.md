@@ -145,8 +145,17 @@ POST /api/auth/logout         # User logout
 # User Management
 GET  /api/admin/users         # Get all users
 POST /api/admin/create-user   # Create single user
-POST /api/admin/bulk-users    # Bulk create users
-POST /api/admin/create-stall  # Create stall user
+POST /api/admin/bulk-users    # Bulk create users (visitors, operators, admins)
+POST /api/admin/create-stall  # Create stall (physical entity, no user)
+
+# Operator & Stall Management
+GET  /api/admin/stalls              # Get all stalls with operator info
+GET  /api/admin/search-operators    # Search operators with assignment status
+GET  /api/admin/search-stalls       # Search stalls with operator info
+POST /api/admin/assign-operator     # Assign operator to stall
+POST /api/admin/remove-operator     # Remove operator from stall
+POST /api/admin/activate-operator   # Activate operator session for stall
+POST /api/admin/deactivate-operator # Deactivate operator session
 
 # Wallet Management
 GET  /api/admin/wallets       # Get all wallets
@@ -167,12 +176,14 @@ POST /api/admin/topup-approve      # Approve request
 GET  /api/admin/topup-image/{path} # Get payment proof image
 ```
 
-### Stall Endpoints
+### Stall/Operator Endpoints
 ```
-GET  /api/stall/wallet              # Get stall wallet info
-GET  /api/stall/history             # Get stall play history
-POST /api/stall/play                # Start new game
+GET  /api/stall/my-active-stalls    # Get operator's active stalls
+GET  /api/stall/wallet              # Get stall wallet info (legacy)
+GET  /api/stall/history             # Get operator's play history
+POST /api/stall/play                # Start new game (requires stall_id)
 POST /api/stall/submit-score        # Submit game score
+GET  /api/stall/pending-games       # Get pending games for active stalls
 GET  /api/stall/visitor-balance/{id} # Get visitor balance
 ```
 
@@ -198,9 +209,15 @@ GET /api/openapi.json        # OpenAPI specification
 - **Role-Based Access**: Endpoints protected by user roles
 
 ### User Roles
-- **Admin**: Full system access, user management, analytics
-- **Stall**: Game operations, score submission, stall management
+- **Admin**: Full system access, user management, operator assignment, analytics
+- **Operator**: Game operations at assigned stalls, score submission, stall management
 - **Visitor**: Personal wallet, game history, leaderboard access
+
+### Multi-Staff Architecture
+- **Stalls**: Physical entities (booths/games) with no login credentials
+- **Operators**: Users who operate stalls with login credentials
+- **Sessions**: Admins activate/deactivate operators for specific stalls
+- **Multi-Assignment**: One operator can be assigned to multiple stalls
 
 ## Enhanced Bulk User Creation
 
@@ -222,11 +239,17 @@ POST /api/admin/bulk-users
     "name": "John Doe"
   },
   {
-    "username": "stall1", 
-    "password": "stallpass123",
-    "role": "stall",
-    "name": "Game Stall 1",
-    "price": 15
+    "username": "operator1", 
+    "password": "oppass123",
+    "role": "operator",
+    "name": "Operator One",
+    "stall_name": "Game Stall 1"
+  },
+  {
+    "username": "admin2",
+    "password": "adminpass",
+    "role": "admin",
+    "name": "Admin User"
   }
 ]
 ```
@@ -234,11 +257,22 @@ POST /api/admin/bulk-users
 ### Response Format
 ```json
 {
-  "success": true,
-  "created_count": 2,
-  "error_count": 0,
-  "created_users": [...],
-  "errors": []
+  "users": [
+    {
+      "user_id": "uuid",
+      "user_name": "visitor1",
+      "wallet_id": "uuid",
+      "user_password": "password123",
+      "role": "visitor"
+    }
+  ],
+  "operator_assignments": [
+    {
+      "operator": "operator1",
+      "stall": "Game Stall 1",
+      "status": "assigned"
+    }
+  ]
 }
 ```
 
@@ -348,7 +382,16 @@ python app.py
 
 ## Version History
 
-### v2.0.0 (February 10, 2026) - Latest
+### v2.1.0 (February 24, 2026) - Latest
+- **Multi-Staff Architecture**: Complete separation of stalls (physical entities) from operators (users)
+- **Operator Management**: Operators can be assigned to multiple stalls with session-based activation
+- **Enhanced Admin APIs**: Added search endpoints for operators and stalls with real-time status
+- **Stall Operations**: New `/my-active-stalls` endpoint for operators to view active assignments
+- **CSV Improvements**: Updated bulk user creation to support operator role and stall assignments
+- **API Enhancements**: Stall endpoints now require `stall_id` parameter for proper multi-stall support
+- **Architecture Cleanup**: Removed legacy stall user creation, stalls now created independently
+
+### v2.0.0 (February 10, 2026)
 - Added Club House Theme
 - Google Authentication integration
 - Performance improvements and timeout optimizations
