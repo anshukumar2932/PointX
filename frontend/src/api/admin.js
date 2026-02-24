@@ -25,7 +25,7 @@ export const createStall = (data) => {
  * POST /api/admin/bulk-users
  */
 export const bulkUsers = (users) => {
-  return api.post("/admin/bulk-users", users);
+  return api.post("/admin/bulk-users", { users });
 };
 
 /**

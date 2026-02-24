@@ -74,6 +74,8 @@ const AdminDashboard = () => {
   // CSV
   const [csvUsers, setCsvUsers] = useState([]);
   const [csvFileName, setCsvFileName] = useState("");
+  const [selectedCSVFile, setSelectedCSVFile] = useState(null);
+  const [csvParsing, setCsvParsing] = useState(false);
   const [csvValidationErrors, setCsvValidationErrors] = useState([]);
   const [showBulkTextArea, setShowBulkTextArea] = useState(false);
   const [bulkTextInput, setBulkTextInput] = useState("");
@@ -419,24 +421,44 @@ const AdminDashboard = () => {
     }
   }, [previewImage]);
 
+  const VALID_ROLES = ['visitor', 'operator', 'admin'];
+  const MIN_PASSWORD_LENGTH = 4;
+
+  const cleanCSVValue = (value) => {
+    if (value === null || value === undefined) return "";
+    return String(value).trim();
+  };
+
+  const optionalCSVValue = (value) => {
+    const cleaned = cleanCSVValue(value);
+    return cleaned === "" ? null : cleaned;
+  };
+
+  const getMissingCSVHeaders = (rows) => {
+    const requiredHeaders = ['username', 'password', 'role'];
+    const presentHeaders = Object.keys(rows?.[0] || {}).map((header) =>
+      header.replace(/^\ufeff/, "").trim().toLowerCase()
+    );
+    return requiredHeaders.filter((header) => !presentHeaders.includes(header));
+  };
+
   const validateUserData = (user, rowIndex) => {
     const errors = [];
     
     // Required fields
-    if (!user.username || user.username.trim() === '') {
+    if (!user.username) {
       errors.push(`Row ${rowIndex + 2}: Username is required`);
     }
-    if (!user.password || user.password.trim() === '') {
+    if (!user.password) {
       errors.push(`Row ${rowIndex + 2}: Password is required`);
     }
-    if (!user.role || user.role.trim() === '') {
+    if (!user.role) {
       errors.push(`Row ${rowIndex + 2}: Role is required`);
     }
     
     // Role validation
-    const validRoles = ['visitor', 'operator', 'admin'];
-    if (user.role && !validRoles.includes(user.role.toLowerCase())) {
-      errors.push(`Row ${rowIndex + 2}: Invalid role "${user.role}". Must be: ${validRoles.join(', ')}`);
+    if (user.role && !VALID_ROLES.includes(user.role)) {
+      errors.push(`Row ${rowIndex + 2}: Invalid role "${user.role}". Must be: ${VALID_ROLES.join(', ')}`);
     }
     
     // Username format validation
@@ -445,13 +467,8 @@ const AdminDashboard = () => {
     }
     
     // Password validation
-    if (user.password && user.password.length < 6) {
-      errors.push(`Row ${rowIndex + 2}: Password must be at least 6 characters`);
-    }
-    
-    // Operator-specific validation
-    if (user.role === 'operator' && user.stall_name && user.stall_name.trim() === '') {
-      errors.push(`Row ${rowIndex + 2}: Operator stall_name cannot be empty if provided`);
+    if (user.password && user.password.length < MIN_PASSWORD_LENGTH) {
+      errors.push(`Row ${rowIndex + 2}: Password must be at least ${MIN_PASSWORD_LENGTH} characters`);
     }
     
     return errors;
@@ -461,18 +478,38 @@ const AdminDashboard = () => {
     const validUsers = [];
     const allErrors = [];
     
+    console.log('Processing CSV data. Total rows:', data.length);
+    
     data.forEach((row, index) => {
+      const rawPrice = cleanCSVValue(row.price);
+      let normalizedPrice;
+      const rowErrors = [];
+
+      if (rawPrice !== '') {
+        const parsedPrice = Number(rawPrice);
+        if (!Number.isInteger(parsedPrice) || parsedPrice < 0) {
+          rowErrors.push(`Row ${index + 2}: Price must be a non-negative whole number`);
+        } else {
+          normalizedPrice = parsedPrice;
+        }
+      }
+
       // Clean and normalize data
       const user = {
-        username: row.username?.trim(),
-        password: row.password?.trim(),
-        role: row.role?.trim().toLowerCase(),
-        name: row.name?.trim() || null,
-        price: row.price ? parseInt(row.price) : undefined,
-        stall_name: row.stall_name?.trim() || null  // For operator assignment
+        username: cleanCSVValue(row.username),
+        password: cleanCSVValue(row.password),
+        role: cleanCSVValue(row.role).toLowerCase(),
+        name: optionalCSVValue(row.name),
+        price: normalizedPrice,
+        stall_name: optionalCSVValue(row.stall_name)  // For operator assignment
       };
       
-      const errors = validateUserData(user, index);
+      // Skip fully empty rows
+      if (!user.username && !user.password && !user.role && !user.name && user.price === undefined && !user.stall_name) {
+        return;
+      }
+
+      const errors = [...rowErrors, ...validateUserData(user, index)];
       
       if (errors.length === 0) {
         validUsers.push(user);
@@ -481,30 +518,75 @@ const AdminDashboard = () => {
       }
     });
     
+    console.log('Valid users:', validUsers.length);
+    console.log('Validation errors:', allErrors.length);
+    
     setCsvUsers(validUsers);
     setCsvValidationErrors(allErrors);
+    
+    // Show alert if no valid users
+    if (validUsers.length === 0 && allErrors.length > 0) {
+      alert(`No valid users found. All ${data.length} rows have errors. Check the validation messages below.`);
+    }
   };
 
   const handleCSVUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
     
+    if (!file.name.toLowerCase().endsWith(".csv")) {
+      alert("Please select a .csv file");
+      return;
+    }
+
+    setSelectedCSVFile(file);
     setCsvFileName(file.name);
     setCsvUsers([]);
     setCsvValidationErrors([]);
-    
-    Papa.parse(file, {
+    setCsvParsing(false);
+
+  };
+
+  const parseSelectedCSV = () => {
+    if (!selectedCSVFile) return;
+
+    setCsvParsing(true);
+    Papa.parse(selectedCSVFile, {
       header: true,
       skipEmptyLines: true,
+      transformHeader: (header) => header.replace(/^\ufeff/, "").trim().toLowerCase(),
       complete: (res) => {
         if (res.errors.length > 0) {
-          alert(`CSV parsing errors: ${res.errors.map(e => e.message).join(', ')}`);
+          const errorMsg = `CSV parsing errors: ${res.errors.map(e => e.message).join(', ')}`;
+          alert(errorMsg);
+          console.error('CSV Parse Errors:', res.errors);
+          setCsvParsing(false);
           return;
         }
+        
+        console.log('CSV parsed successfully. Rows:', res.data.length);
+        console.log('Sample row:', res.data[0]);
+        
+        if (res.data.length === 0) {
+          alert('CSV file is empty or has no valid data rows');
+          setCsvParsing(false);
+          return;
+        }
+
+        const missingHeaders = getMissingCSVHeaders(res.data);
+        if (missingHeaders.length > 0) {
+          alert(`Missing required CSV columns: ${missingHeaders.join(', ')}`);
+          setCsvParsing(false);
+          return;
+        }
+        
         processCSVData(res.data);
+        setCsvParsing(false);
       },
       error: (error) => {
         alert(`Failed to parse CSV: ${error.message}`);
+        console.error('CSV Parse Error:', error);
+        setCsvParsing(false);
       }
     });
   };
@@ -518,9 +600,19 @@ const AdminDashboard = () => {
     Papa.parse(bulkTextInput.trim(), {
       header: true,
       skipEmptyLines: true,
+      transformHeader: (header) => header.replace(/^\ufeff/, "").trim().toLowerCase(),
       complete: (res) => {
         if (res.errors.length > 0) {
           alert(`Text parsing errors: ${res.errors.map(e => e.message).join(', ')}`);
+          return;
+        }
+        if (res.data.length === 0) {
+          alert('Text input is empty or has no valid data rows');
+          return;
+        }
+        const missingHeaders = getMissingCSVHeaders(res.data);
+        if (missingHeaders.length > 0) {
+          alert(`Missing required CSV columns: ${missingHeaders.join(', ')}`);
           return;
         }
         processCSVData(res.data);
@@ -557,9 +649,18 @@ const AdminDashboard = () => {
     if (!csvUsers.length) return alert("No valid users to create");
     if (!window.confirm(`Create ${csvUsers.length} users?`)) return;
     
+    const usersPayload = csvUsers.map((user) => ({
+      username: user.username,
+      password: user.password,
+      role: user.role,
+      ...(user.name ? { name: user.name } : {}),
+      ...(typeof user.price === 'number' ? { price: user.price } : {}),
+      ...(user.stall_name ? { stall_name: user.stall_name } : {}),
+    }));
+
     setActionLoading(true);
     try {
-      const response = await bulkUsers(csvUsers);
+      const response = await bulkUsers(usersPayload);
       const result = response.data;
       
       // Show detailed results
@@ -597,6 +698,7 @@ const AdminDashboard = () => {
       setCsvUsers([]);
       setCsvValidationErrors([]);
       setCsvFileName("");
+      setSelectedCSVFile(null);
       setBulkTextInput("");
       setShowBulkTextArea(false);
       
@@ -1510,6 +1612,7 @@ const AdminDashboard = () => {
               <button 
                 className="btn btn-secondary btn-sm"
                 onClick={downloadSampleCSV}
+                type="button"
                 disabled={isBusy}
                 style={{ marginRight: '8px' }}
               >
@@ -1518,6 +1621,7 @@ const AdminDashboard = () => {
               <button 
                 className="btn btn-secondary btn-sm"
                 onClick={() => setShowBulkTextArea(!showBulkTextArea)}
+                type="button"
                 disabled={isBusy}
               >
                 ✏️ Manual Text Entry
@@ -1546,6 +1650,7 @@ admin2,adminpass,admin,Admin User,,`}
                 <button
                   className="btn btn-primary btn-sm mt-sm"
                   onClick={processBulkText}
+                  type="button"
                   disabled={isBusy || !bulkTextInput.trim()}
                 >
                   Parse Text Input
@@ -1561,7 +1666,74 @@ admin2,adminpass,admin,Admin User,,`}
               disabled={isBusy} 
               className="input" 
             />
-            {csvFileName && <p className="mt-sm mb-sm">📁 Selected: {csvFileName}</p>}
+            <button
+              className="btn btn-primary btn-sm mt-sm"
+              onClick={parseSelectedCSV}
+              type="button"
+              disabled={isBusy || csvParsing || !selectedCSVFile}
+            >
+              {csvParsing ? "Reading CSV..." : "Read CSV File"}
+            </button>
+            <button
+              className="btn btn-success btn-sm mt-sm"
+              onClick={handleBulkUpload}
+              type="button"
+              disabled={isBusy || csvParsing || csvUsers.length === 0}
+              style={{ marginLeft: '8px' }}
+            >
+              {actionLoading ? 'Submitting...' : `Submit ${csvUsers.length} Valid Users`}
+            </button>
+            {csvFileName && (
+              <p className="mt-sm mb-sm" style={{ color: '#0369a1', fontWeight: 'bold' }}>
+                📁 Selected: {csvFileName}
+                {csvUsers.length === 0 && csvValidationErrors.length === 0 && !csvParsing && ' - Click "Read CSV File" to parse'}
+                {csvParsing && ' - Processing...'}
+                {!csvParsing && (csvUsers.length > 0 || csvValidationErrors.length > 0) && ` - Parsed: ${csvUsers.length} valid, ${csvValidationErrors.length} errors`}
+              </p>
+            )}
+            
+            {/* Show message if file selected but no valid users */}
+            {csvFileName && csvUsers.length === 0 && csvValidationErrors.length > 0 && (
+              <div style={{
+                marginTop: '12px',
+                padding: '12px',
+                backgroundColor: '#fef2f2',
+                border: '1px solid #fecaca',
+                borderRadius: '6px',
+                fontSize: '13px',
+                color: '#991b1b'
+              }}>
+                ⚠️ No valid users found in CSV. All rows have validation errors. Please check the errors below and fix your CSV file.
+              </div>
+            )}
+
+            {csvValidationErrors.length > 0 && (
+              <div style={{
+                marginTop: '12px',
+                backgroundColor: '#fef2f2',
+                border: '1px solid #fecaca',
+                borderRadius: '6px',
+                padding: '12px'
+              }}>
+                <p style={{ margin: '0 0 8px 0', color: '#dc2626', fontWeight: 'bold' }}>
+                  ⚠️ Validation Errors ({csvValidationErrors.length})
+                </p>
+                <div style={{
+                  maxHeight: '200px',
+                  overflowY: 'auto',
+                  backgroundColor: '#fff',
+                  padding: '8px',
+                  borderRadius: '4px',
+                  border: '1px solid #fecaca'
+                }}>
+                  <ul style={{ margin: '0', paddingLeft: '20px', fontSize: '12px', color: '#dc2626' }}>
+                    {csvValidationErrors.map((error, i) => (
+                      <li key={i}>{error}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            )}
             
             {/* Validation Results */}
             {csvUsers.length > 0 && (
@@ -1577,21 +1749,6 @@ admin2,adminpass,admin,Admin User,,`}
                   <p style={{ margin: '0' }}>
                     <strong>{csvUsers.length}</strong> valid users ready to create
                   </p>
-                  {csvValidationErrors.length > 0 && (
-                    <div style={{ marginTop: '8px' }}>
-                      <p style={{ margin: '0 0 4px 0', color: '#dc2626' }}>
-                        <strong>⚠️ {csvValidationErrors.length} rows skipped:</strong>
-                      </p>
-                      <ul style={{ margin: '0', paddingLeft: '20px', fontSize: '12px', color: '#dc2626' }}>
-                        {csvValidationErrors.slice(0, 5).map((error, i) => (
-                          <li key={i}>{error}</li>
-                        ))}
-                        {csvValidationErrors.length > 5 && (
-                          <li>... and {csvValidationErrors.length - 5} more</li>
-                        )}
-                      </ul>
-                    </div>
-                  )}
                 </div>
 
                 {/* Preview Table */}
@@ -1628,14 +1785,6 @@ admin2,adminpass,admin,Admin User,,`}
                     </tbody>
                   </table>
                 </div>
-
-                <button 
-                  className="btn btn-success btn-full" 
-                  onClick={handleBulkUpload} 
-                  disabled={isBusy}
-                >
-                  {actionLoading ? 'Creating Users...' : `🚀 Create ${csvUsers.length} Users`}
-                </button>
               </div>
             )}
           </div>

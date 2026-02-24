@@ -53,9 +53,10 @@ admin_bp = Blueprint("admin", __name__)
 class CreateUserSchema(Schema):
     username = fields.Str(required=True)
     password = fields.Str(required=True)
-    name = fields.Str(required=True)
-    role = fields.Str()
-    price = fields.Int()
+    name = fields.Str(required=False, allow_none=True)
+    role = fields.Str(required=False)
+    price = fields.Int(required=False, allow_none=True)
+    stall_name = fields.Str(required=False, allow_none=True)
 
 
 class CreateUserResponseSchema(Schema):
@@ -172,7 +173,7 @@ def create_stall():
 @require_auth(["admin"])
 @admin_bp.arguments(BulkUsersSchema)
 @admin_bp.response(200)
-def bulk_users():
+def bulk_users(data):
     """
     Bulk create users with support for:
     - visitors, operators, admins
@@ -180,7 +181,7 @@ def bulk_users():
     - Note: Stalls must be created separately via /create-stall
     """
 
-    inp=request.get_json()
+    inp = data.get("users", [])
     users=[]
     operator_assignments = []  # Track operator->stall assignments
     
