@@ -434,7 +434,7 @@ const AdminDashboard = () => {
     }
     
     // Role validation
-    const validRoles = ['visitor', 'operator', 'stall', 'admin'];
+    const validRoles = ['visitor', 'operator', 'admin'];
     if (user.role && !validRoles.includes(user.role.toLowerCase())) {
       errors.push(`Row ${rowIndex + 2}: Invalid role "${user.role}". Must be: ${validRoles.join(', ')}`);
     }
@@ -447,13 +447,6 @@ const AdminDashboard = () => {
     // Password validation
     if (user.password && user.password.length < 6) {
       errors.push(`Row ${rowIndex + 2}: Password must be at least 6 characters`);
-    }
-    
-    // Stall-specific validation
-    if (user.role === 'stall') {
-      if (user.price && (isNaN(user.price) || user.price < 1)) {
-        errors.push(`Row ${rowIndex + 2}: Stall price must be a number >= 1`);
-      }
     }
     
     // Operator-specific validation
@@ -785,7 +778,7 @@ const AdminDashboard = () => {
                   <tr key={u.id || u.username}>
                     <td data-label="Username">{u.username}</td>
                     <td data-label="Role">
-                      <span className={`badge badge-${u.role === 'admin' ? 'reward' : u.role === 'stall' ? 'payment' : 'topup'}`}>
+                      <span className={`badge badge-${u.role === 'admin' ? 'reward' : u.role === 'operator' ? 'payment' : 'topup'}`}>
                         {u.role}
                       </span>
                     </td>
@@ -819,7 +812,7 @@ const AdminDashboard = () => {
                   <tr key={u.id || u.username}>
                     <td data-label="User">{u.username}</td>
                     <td data-label="Role">
-                      <span className={`badge badge-${u.role === 'admin' ? 'reward' : u.role === 'stall' ? 'payment' : 'topup'}`}>
+                      <span className={`badge badge-${u.role === 'admin' ? 'reward' : u.role === 'operator' ? 'payment' : 'topup'}`}>
                         {u.role}
                       </span>
                     </td>
@@ -1048,8 +1041,8 @@ const AdminDashboard = () => {
                 <option value="">-- Choose User --</option>
                 {users
                   .filter(u => {
-                    // Only show stall users who are NOT already assigned to any stall
-                    if (u.role !== 'stall') return false;
+                    // Only show operators who are NOT already assigned to any stall
+                    if (u.role !== 'operator') return false;
                     
                     // Check if this user is already assigned to any stall
                     const isAssigned = stalls.some(stall => 
@@ -1065,7 +1058,7 @@ const AdminDashboard = () => {
                   ))}
               </select>
 
-              {users.filter(u => u.role === 'stall').length === 0 && (
+              {users.filter(u => u.role === 'operator').length === 0 && (
                 <div style={{
                   marginTop: '12px',
                   padding: '12px',
@@ -1075,17 +1068,17 @@ const AdminDashboard = () => {
                   fontSize: '13px',
                   color: '#991b1b'
                 }}>
-                  ⚠️ No stall users found. Create stall users first in the "Create" tab.
+                  ⚠️ No operators found. Create operator users first in the "Create" tab.
                 </div>
               )}
 
               {users.filter(u => {
-                if (u.role !== 'stall') return false;
+                if (u.role !== 'operator') return false;
                 const isAssigned = stalls.some(stall => 
                   stall.operators && stall.operators.some(op => op.user_id === u.id)
                 );
                 return !isAssigned;
-              }).length === 0 && users.filter(u => u.role === 'stall').length > 0 && (
+              }).length === 0 && users.filter(u => u.role === 'operator').length > 0 && (
                 <div style={{
                   marginTop: '12px',
                   padding: '12px',
@@ -1095,7 +1088,7 @@ const AdminDashboard = () => {
                   fontSize: '13px',
                   color: '#92400e'
                 }}>
-                  ℹ️ All stall users are already assigned. Remove an operator from a stall to reassign them.
+                  ℹ️ All operators are already assigned. Remove an operator from a stall to reassign them.
                 </div>
               )}
 
@@ -1341,7 +1334,7 @@ const AdminDashboard = () => {
               <select className="input" value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value})} disabled={isBusy}>
                 <option value="visitor">Visitor</option>
                 <option value="admin">Admin</option>
-                <option value="stall">Stall</option>
+                <option value="operator">Operator</option>
               </select>
               <button className="btn btn-full" type="submit" disabled={isBusy}>
                 {actionLoading ? "Creating..." : "Create User"}
@@ -1424,8 +1417,8 @@ const AdminDashboard = () => {
                     <option value="">-- Assign Later --</option>
                     {users
                       .filter(u => {
-                        // Only show unassigned stall users
-                        if (u.role !== 'stall') return false;
+                        // Only show unassigned operators
+                        if (u.role !== 'operator') return false;
                         const isAssigned = stalls.some(stall => 
                           stall.operators && stall.operators.some(op => op.user_id === u.id)
                         );
@@ -1617,12 +1610,12 @@ admin2,adminpass,admin,Admin User,,`}
                         <tr key={i}>
                           <td>{user.username}</td>
                           <td>
-                            <span className={`badge badge-${user.role === 'admin' ? 'reward' : user.role === 'stall' ? 'payment' : 'topup'}`}>
+                            <span className={`badge badge-${user.role === 'admin' ? 'reward' : user.role === 'operator' ? 'payment' : 'topup'}`}>
                               {user.role}
                             </span>
                           </td>
                           <td>{user.name || '-'}</td>
-                          <td>{user.role === 'stall' ? (user.price || 10) : '-'}</td>
+                          <td>-</td>
                         </tr>
                       ))}
                       {csvUsers.length > 10 && (

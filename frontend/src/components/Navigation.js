@@ -7,7 +7,7 @@ const Navigation = () => {
   const getRoleIcon = (role) => {
     switch (role) {
       case 'admin': return 'Admin';
-      case 'stall': return 'Stall';
+      case 'operator': return 'Operator';
       case 'visitor': return 'Visitor';
       default: return 'User';
     }

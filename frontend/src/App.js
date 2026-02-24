@@ -42,10 +42,10 @@ function AppContent() {
         } 
       />
       <Route 
-        path="/stall" 
+        path="/operator" 
         element={
           !user ? <Navigate to="/login" replace /> :
-          user.role === 'stall' ? (
+          user.role === 'operator' ? (
             <div className="container">
               <Navigation />
               <StallDashboard />

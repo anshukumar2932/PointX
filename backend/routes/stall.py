@@ -40,7 +40,7 @@ def safe_execute(query, retries=3, delay=1):
 
 
 @stall_bp.route("/my-active-stalls", methods=["GET"])
-@require_auth(["operator", "stall"])
+@require_auth(["operator"])
 def my_active_stalls():
     """
     Get all stalls where the current user has an active session
@@ -71,7 +71,7 @@ def my_active_stalls():
 
 
 @stall_bp.route("/play", methods=["POST"])
-@require_auth(["operator", "stall"])
+@require_auth(["operator"])
 def start_game():
     """
     Start a game for a visitor at a specific stall
@@ -171,7 +171,7 @@ def start_game():
 
 
 @stall_bp.route("/submit-score", methods=["POST"])
-@require_auth(["operator", "stall"])
+@require_auth(["operator"])
 def submit_score():
     data = request.json
 
@@ -187,7 +187,7 @@ def submit_score():
 
 
 @stall_bp.route("/history", methods=["GET"])
-@require_auth(["operator", "stall"])
+@require_auth(["operator"])
 def history():
     result = safe_execute(
         supabase.rpc("get_stall_history", {
@@ -197,7 +197,7 @@ def history():
     return jsonify(result.data or []), 200
 
 @stall_bp.route("/visitor-balance/<wallet_id>", methods=["GET"])
-@require_auth(["operator", "stall"])
+@require_auth(["operator"])
 def get_visitor_balance(wallet_id):
     """Get visitor balance by wallet ID for stall operators"""
     try:
@@ -220,7 +220,7 @@ def get_visitor_balance(wallet_id):
 
 
 @stall_bp.route("/wallet", methods=["GET"])
-@require_auth(["operator", "stall"])
+@require_auth(["operator"])
 def wallet():
     """
     Get wallet info for operator's active stall(s)
@@ -255,7 +255,7 @@ def wallet():
     }), 200
 
 @stall_bp.route("/pending-games", methods=["GET"])
-@require_auth(["operator", "stall"])
+@require_auth(["operator"])
 def pending_games():
     """
     Get pending games for operator's active stalls

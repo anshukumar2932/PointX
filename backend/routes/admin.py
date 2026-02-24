@@ -90,12 +90,8 @@ class TopupApproveSchema(Schema):
 
 @admin_bp.route("/create-user", methods=["POST"])
 @require_auth(["admin"])
-def create_visitor():
-    """
-    Docstring for create_visitor
-    """
-
-    data=request.json
+def create_user():
+    data = request.json
 
     hashed = bcrypt.hashpw(
         data["password"].encode(),
@@ -107,34 +103,20 @@ def create_visitor():
             "username": data["username"],
             "reg_no": data["username"],
             "password_hash": hashed,
-            "passwd" : data["password"],
+            "passwd": data["password"],
             "role": data.get("role", "visitor")
         })
     ).data[0]
 
+    balance = 60 if user["role"] == "visitor" else 10000 if user["role"] == "admin" else 0
+
     wallet = safe_execute(
         supabase.table("wallets").insert({
             "user_id": user["id"],
-            "username": data["name"],
-            "balance": 100 if user["role"] == "visitor" else (10000 if user["role"] == "admin" else 0)
+            "username": data.get("name", data["username"]),
+            "balance": balance
         })
     ).data[0]
-
-    if user["role"]=="stall":
-        stall = safe_execute(
-            supabase.table("stalls").insert({        
-                "user_id": user["id"],
-            "stall_name": data["username"],
-            "wallet_id": wallet["id"],
-            "price_per_play": data["price"]
-        })
-        ).data[0]
-        return jsonify({
-            "user_id": user["id"],
-            "user_name": user["username"],
-            "wallet_id": wallet["id"],
-            "stall_id": stall["id"]
-        })
 
     return jsonify({
         "user_id": user["id"],
@@ -193,9 +175,9 @@ def create_stall():
 def bulk_users():
     """
     Bulk create users with support for:
-    - visitors, operators, stalls (legacy), admins
+    - visitors, operators, admins
     - operator assignment to stalls via stall_name
-    - Note: Creating stalls via CSV is deprecated - use /create-stall instead
+    - Note: Stalls must be created separately via /create-stall
     """
 
     inp=request.get_json()
@@ -245,19 +227,6 @@ def bulk_users():
             "user_password": user["passwd"],
             "role": user["role"]
         }
-        
-        # Handle legacy stall creation (deprecated)
-        if user["role"]=="stall":
-            stall = safe_execute(
-                supabase.table("stalls").insert({        
-                "user_id": user["id"],
-                "stall_name": data["username"],
-                "wallet_id": wallet["id"],
-                "price_per_play": data.get("price", 10)
-            })
-            ).data[0]
-            user_result["stall_id"] = stall["id"]
-            user_result["note"] = "Legacy stall user created - consider using /create-stall instead"
         
         # Handle operator assignment to existing stall
         if user["role"] == "operator":

@@ -5,7 +5,7 @@ import api from "./axios";
 ===================================================== */
 
 /**
- * Create visitor / admin / stall user
+ * Create visitor / admin / operator user
  * POST /api/admin/create-user
  */
 export const createUser = (data) => {
@@ -13,7 +13,7 @@ export const createUser = (data) => {
 };
 
 /**
- * Create stall (stall user + wallet + config)
+ * Create stall (physical entity with wallet)
  * POST /api/admin/create-stall
  */
 export const createStall = (data) => {

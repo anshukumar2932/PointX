@@ -97,7 +97,7 @@ const QRDebugger = () => {
         <ul>
           <li><strong>Network Error:</strong> Check if your backend URL is correct in environment variables</li>
           <li><strong>401 Unauthorized:</strong> Make sure you're logged in and have a valid token</li>
-          <li><strong>403 Forbidden:</strong> Check if your user has the correct role (stall/admin)</li>
+          <li><strong>403 Forbidden:</strong> Check if your user has the correct role (operator/admin)</li>
           <li><strong>404 Not Found:</strong> The visitor wallet ID might not exist in the database</li>
           <li><strong>CORS Error:</strong> Backend needs to allow your frontend domain</li>
           <li><strong>500 Topup Error:</strong> Check storage bucket "payments" exists, image processing works, and topup_requests table is accessible</li>

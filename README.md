@@ -4,13 +4,13 @@ A comprehensive event management platform featuring QR code-based point transact
 
 ## Overview
 
-PointX is a complete ecosystem for managing points, games, and transactions at events. It supports multiple user roles (Admin, Stall, Visitor) with dedicated web interfaces and a robust API backend.
+PointX is a complete ecosystem for managing points, games, and transactions at events. It supports multiple user roles (Admin, Operator, Visitor) with dedicated web interfaces and a robust API backend.
 
 ### Key Features
 
 - **QR-Based Gaming**: Scan QR codes to start games and submit scores
 - **Point Management**: Real-time wallet transactions and balance tracking
-- **Multi-Role System**: Admin, Stall, and Visitor roles with specific permissions
+- **Multi-Role System**: Admin, Operator, and Visitor roles with specific permissions
 - **Web-Based Interface**: Responsive React application for all devices
 - **Analytics**: Comprehensive dashboards with leaderboards and statistics
 - **Secure Authentication**: JWT-based auth with role-based access control
