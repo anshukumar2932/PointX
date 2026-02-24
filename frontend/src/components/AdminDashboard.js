@@ -88,6 +88,12 @@ const AdminDashboard = () => {
 
   const [qrInput, setQrInput] = useState("");
   const [qrScanResult, setQrScanResult] = useState(null);
+  const attendanceScanStateRef = React.useRef({
+    inFlight: false,
+    lastKey: "",
+    lastAt: 0,
+    lastInvalidAt: 0,
+  });
 
   // Operator Management
   const [operatorForm, setOperatorForm] = useState({
@@ -112,6 +118,7 @@ const AdminDashboard = () => {
       if (cached.plays) setPlays(cached.plays);
       if (cached.topupRequests) setTopupRequests(cached.topupRequests);
       if (cached.leaderboard) setLeaderboard(cached.leaderboard);
+      if (cached.stalls) setStalls(cached.stalls);
       return;
     }
 
@@ -162,17 +169,8 @@ const AdminDashboard = () => {
         loadedData.leaderboard = res.data || [];
       }
 
-      if (activeTab === "operators") {
+      if (["overview", "users", "wallets", "operators"].includes(activeTab)) {
         const res = await getStalls();
-        console.log("🔍 Stalls data received:", res.data);
-        
-        // Debug: Check active operators
-        res.data?.forEach(stall => {
-          console.log(`Stall: ${stall.stall_name}`);
-          console.log(`  Active Operators (${stall.active_operator_count}):`, stall.active_operators);
-          console.log(`  All Operators:`, stall.operators);
-        });
-        
         setStalls(res.data || []);
         loadedData.stalls = res.data || [];
       }
@@ -230,6 +228,7 @@ const AdminDashboard = () => {
 
   useEffect(() => {
     let scanner = null;
+    let resumeTimer = null;
 
     if (activeTab === "attendance") {
       scanner = new Html5QrcodeScanner(
@@ -246,7 +245,7 @@ const AdminDashboard = () => {
       );
 
       scanner.render(
-        (decodedText) => {
+        async (decodedText) => {
           try {
             // Case 1: JSON format
             let parsed;
@@ -261,24 +260,49 @@ const AdminDashboard = () => {
             }
 
             if (!parsed || !parsed.user_id || !parsed.reg_no) {
-              setMessage("Invalid QR format. Expected: JSON or user_id:reg-no");
-              setMessageType("error");
+              const now = Date.now();
+              if (now - attendanceScanStateRef.current.lastInvalidAt > 1500) {
+                attendanceScanStateRef.current.lastInvalidAt = now;
+                setMessage("Invalid QR format. Expected: JSON or user_id:reg-no");
+                setMessageType("error");
+              }
               return;
             }
 
-            setQrScanResult(decodedText);
+            const scanKey = `${parsed.user_id}:${parsed.reg_no}`;
+            const now = Date.now();
 
-            runAction(
+            if (attendanceScanStateRef.current.inFlight) {
+              return;
+            }
+
+            if (
+              attendanceScanStateRef.current.lastKey === scanKey &&
+              now - attendanceScanStateRef.current.lastAt < 7000
+            ) {
+              return;
+            }
+
+            attendanceScanStateRef.current.inFlight = true;
+            attendanceScanStateRef.current.lastKey = scanKey;
+            attendanceScanStateRef.current.lastAt = now;
+
+            setQrScanResult(scanKey);
+            scanner.pause();
+
+            await runAction(
               () => markAttendance(parsed),
               "Attendance marked successfully (camera scan)"
             );
 
-            // Optional: pause scanning for a few seconds after success
-            scanner.pause();
-            setTimeout(() => scanner.resume(), 5000);
+            resumeTimer = setTimeout(() => {
+              scanner.resume();
+            }, 5000);
 
           } catch (err) {
             // Ignore most scan errors (normal behavior)
+          } finally {
+            attendanceScanStateRef.current.inFlight = false;
           }
         },
         (err) => {
@@ -289,6 +313,9 @@ const AdminDashboard = () => {
     }
 
     return () => {
+      if (resumeTimer) {
+        clearTimeout(resumeTimer);
+      }
       if (scanner) {
         scanner
           .clear()
@@ -399,7 +426,15 @@ const AdminDashboard = () => {
 
   const debugStorage = async () => {
     try {
-      const response = await api.get('/admin/storage-debug');
+      let userId = null;
+      try {
+        userId = JSON.parse(localStorage.getItem("user") || "null")?.user_id;
+      } catch (e) {
+        userId = null;
+      }
+      const response = await api.get('/admin/storage-debug', {
+        params: userId ? { user_id: userId } : {},
+      });
       alert(`Storage Debug Info:\n${JSON.stringify(response.data, null, 2)}`);
     } catch (error) {
       alert(`Storage debug failed: ${error.response?.data?.error || error.message}`);
@@ -774,9 +809,31 @@ const AdminDashboard = () => {
     );
   };
 
-  const filteredUsers = users.filter(u =>
-    (u.username || "").toLowerCase().includes(userSearch.toLowerCase()) ||
-    (u.role || "").toLowerCase().includes(userSearch.toLowerCase())
+  const operatorStallsByUserId = React.useMemo(() => {
+    const map = {};
+    (stalls || []).forEach((stall) => {
+      (stall.operators || []).forEach((op) => {
+        if (!op?.user_id) return;
+        if (!map[op.user_id]) map[op.user_id] = [];
+        map[op.user_id].push(stall.stall_name);
+      });
+    });
+    return map;
+  }, [stalls]);
+
+  const getRoleDisplay = useCallback((user) => {
+    const role = user?.role || "";
+    if (role !== "operator") return role;
+
+    const assigned = [...new Set(operatorStallsByUserId[user.id] || [])].filter(Boolean);
+    if (assigned.length === 0) return "operator-unassigned";
+    return `operator-${assigned.join(",")}`;
+  }, [operatorStallsByUserId]);
+
+  const searchText = userSearch.toLowerCase();
+  const filteredUsers = users.filter((u) =>
+    (u.username || "").toLowerCase().includes(searchText) ||
+    getRoleDisplay(u).toLowerCase().includes(searchText)
   );
 
   const isBusy = loading || actionLoading;
@@ -881,7 +938,7 @@ const AdminDashboard = () => {
                     <td data-label="Username">{u.username}</td>
                     <td data-label="Role">
                       <span className={`badge badge-${u.role === 'admin' ? 'reward' : u.role === 'operator' ? 'payment' : 'topup'}`}>
-                        {u.role}
+                        {getRoleDisplay(u)}
                       </span>
                     </td>
                     <td data-label="Created">{u.created_at ? new Date(u.created_at).toLocaleString() : "Not available"}</td>
@@ -915,7 +972,7 @@ const AdminDashboard = () => {
                     <td data-label="User">{u.username}</td>
                     <td data-label="Role">
                       <span className={`badge badge-${u.role === 'admin' ? 'reward' : u.role === 'operator' ? 'payment' : 'topup'}`}>
-                        {u.role}
+                        {getRoleDisplay(u)}
                       </span>
                     </td>
                     <td data-label="Balance">
@@ -1806,7 +1863,7 @@ admin2,adminpass,admin,Admin User,,`}
       {/* QR DEBUG */}
       {/* ──────────────────────────────────────────────── */}
       {activeTab === "qr-debug" && (
-        <QRDebugger />
+        <QRDebugger mode="admin" />
       )}
 
       {/* ──────────────────────────────────────────────── */}

@@ -4,6 +4,16 @@ import { Html5QrcodeScanner } from "html5-qrcode";
 const QRScanner = ({ onScan, isActive, onError }) => {
   const scannerRef = useRef(null);
   const startedRef = useRef(false);
+  const onScanRef = useRef(onScan);
+  const onErrorRef = useRef(onError);
+  const processingRef = useRef(false);
+  const lastSuccessfulScanRef = useRef({ text: "", ts: 0 });
+  const lastParseErrorRef = useRef(0);
+
+  useEffect(() => {
+    onScanRef.current = onScan;
+    onErrorRef.current = onError;
+  }, [onScan, onError]);
 
   useEffect(() => {
     if (!isActive || startedRef.current) return;
@@ -40,21 +50,52 @@ const QRScanner = ({ onScan, isActive, onError }) => {
     scannerRef.current = scanner;
 
     scanner.render(
-      (text) => {
+      async (text) => {
+        let data;
         try {
-          const data = JSON.parse(text);
+          const now = Date.now();
+
+          if (
+            lastSuccessfulScanRef.current.text === text &&
+            now - lastSuccessfulScanRef.current.ts < 3000
+          ) {
+            return;
+          }
+
+          if (processingRef.current) {
+            return;
+          }
+
+          data = JSON.parse(text);
           
           // Validate the QR data structure
           if (!data || typeof data !== 'object') {
             throw new Error("Invalid QR data structure");
           }
-          
-          onScan(data);
+
         } catch (parseError) {
-          onError?.({ 
+          const now = Date.now();
+          if (now - lastParseErrorRef.current < 1500) {
+            return;
+          }
+          lastParseErrorRef.current = now;
+          onErrorRef.current?.({
             message: "Invalid QR format. Please ensure you're scanning a valid arcade wallet QR code.",
             details: parseError.message 
           });
+          return;
+        }
+
+        try {
+          processingRef.current = true;
+          await Promise.resolve(onScanRef.current?.(data, text));
+          lastSuccessfulScanRef.current = { text, ts: Date.now() };
+        } catch (scanError) {
+          onErrorRef.current?.({
+            message: scanError?.message || "Failed to process scanned QR code."
+          });
+        } finally {
+          processingRef.current = false;
         }
       },
       (err) => {
@@ -67,9 +108,9 @@ const QRScanner = ({ onScan, isActive, onError }) => {
         
         // Only report actual errors to the user
         if (err.includes("NotAllowedError")) {
-          onError?.({ message: "Camera permission denied. Please allow camera access." });
+          onErrorRef.current?.({ message: "Camera permission denied. Please allow camera access." });
         } else if (err.includes("NotReadableError")) {
-          onError?.({ message: "Camera is not accessible. Please check if another app is using it." });
+          onErrorRef.current?.({ message: "Camera is not accessible. Please check if another app is using it." });
         }
       }
     );
@@ -79,9 +120,11 @@ const QRScanner = ({ onScan, isActive, onError }) => {
         scannerRef.current.clear().catch(() => {});
         scannerRef.current = null;
       }
+      processingRef.current = false;
+      lastSuccessfulScanRef.current = { text: "", ts: 0 };
       startedRef.current = false;
     };
-  }, [isActive, onScan, onError]);
+  }, [isActive]);
 
   return (
     <div className="scanner-container">

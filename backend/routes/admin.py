@@ -146,6 +146,7 @@ def create_stall():
         supabase.table("wallets").insert({
             "username": stall_name,
             "balance": 0,
+            "is_active": True,
             "user_id": None  # Stall wallet not tied to user
         })
     ).data[0]
@@ -329,8 +330,6 @@ def admin_topup(data):
     -amount
     """
 
-    data = request.json
-
     res=safe_execute(supabase.table("wallets")\
         .select("id, is_active")\
         .eq("username", data["username"]))
@@ -432,8 +431,6 @@ def attendance(data):
     - reg_no
     """
 
-    data = request.get_json()
-
     if "user_id" not in data or "reg_no" not in data:
         return jsonify({"error": "user_id and reg_no are required"}), 400
 
@@ -525,7 +522,10 @@ def get_topup_image(image_path):
 def debug_storage():
     """Debug storage bucket and files"""
     try:
+        target_user_id = request.args.get("user_id") or request.user["id"]
         debug_info = {
+            "requested_by": request.user["id"],
+            "target_user_id": target_user_id,
             "bucket_info": {},
             "topups_folder": {},
             "user_folders": {}
@@ -564,9 +564,8 @@ def debug_storage():
         
         # Check specific user folder
         try:
-            user_id = "5f51b271-3d9d-423c-a5ee-dd755798467a"
-            user_files = supabase.storage.from_("payments").list(path=f"topups/{user_id}/")
-            debug_info["user_folders"][user_id] = {
+            user_files = supabase.storage.from_("payments").list(path=f"topups/{target_user_id}/")
+            debug_info["user_folders"][target_user_id] = {
                 "file_count": len(user_files),
                 "files": []
             }
@@ -578,10 +577,10 @@ def debug_storage():
                     name = f.get('name', str(f))
                 else:
                     name = str(f)
-                debug_info["user_folders"][user_id]["files"].append(name)
+                debug_info["user_folders"][target_user_id]["files"].append(name)
                 
         except Exception as e:
-            debug_info["user_folders"][user_id] = {"error": str(e)}
+            debug_info["user_folders"][target_user_id] = {"error": str(e)}
         
         return jsonify(debug_info), 200
         
@@ -638,8 +637,6 @@ def test_image_upload():
 @admin_bp.arguments(TopupApproveSchema)
 @admin_bp.response(200)
 def approve_topup(data):
-    data = request.json
-
     result = safe_execute(supabase.rpc("approve_topup_request", {
         "p_request_id": data["request_id"],
         "p_admin_id": request.user["id"]

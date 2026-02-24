@@ -125,6 +125,7 @@ def leaderboard():
     return jsonify(res.data), 200
 
 @visitor_bp.route("/topup-test", methods=["GET"])
+@visitor_bp.route("/debug/topup", methods=["GET"])
 @require_auth(["visitor"])
 def test_topup_dependencies():
     """Test endpoint to check topup request dependencies"""
@@ -161,7 +162,7 @@ def test_topup_dependencies():
             "wallet": {
                 "status": wallet_status,
                 "active": wallet_active,
-                "id": wallet_res.data["id"] if wallet_res.data else None
+                "id": wallet_res.data[0]["id"] if wallet_res.data else None
             },
             "storage": {
                 "payments_bucket": bucket_status
@@ -274,6 +275,4 @@ def create_topup_request():
     except Exception as e:
         # Catch-all error handler
         return jsonify({"error": f"Internal server error: {str(e)}"}), 500
-
-
 

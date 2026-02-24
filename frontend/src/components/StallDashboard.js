@@ -11,7 +11,7 @@
  * - Keyboard shortcuts (Enter/ESC)
  */
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import api from "../api/axios";
 import QRScanner from "./QRScanner";
 import QRDebugger from "./QRDebugger";
@@ -30,7 +30,14 @@ const StallDashboard = () => {
   const [plays, setPlays] = useState([]);
   const [pendingGames, setPendingGames] = useState([]);
   const [wallet, setWallet] = useState(null);
+  const [activeStalls, setActiveStalls] = useState([]);
+  const [selectedStallId, setSelectedStallId] = useState("");
   const [selectedPendingGame, setSelectedPendingGame] = useState(null);
+  const scanStateRef = useRef({
+    inFlight: false,
+    walletId: "",
+    timestamp: 0,
+  });
   const formatUTC = (utcString) => {
     if (!utcString) return "—";
     const date = new Date(
@@ -61,62 +68,112 @@ const StallDashboard = () => {
         setScanning(false);
       }
       // Enter key to start scanning when not scanning
-      if (event.key === 'Enter' && !scanning && activeTab === 'scanner' && !loading) {
+      if (event.key === 'Enter' && !scanning && activeTab === 'scanner' && !loading && selectedStallId) {
         setScanning(true);
       }
     };
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [scanning, activeTab, loading]);
+  }, [scanning, activeTab, loading, selectedStallId]);
 
-  useEffect(() => {
-    loadWallet();
-    loadHistory();
-    loadPendingGames();
-    
-    // Auto-refresh every 30 seconds for real-time updates
-    const interval = setInterval(() => {
-      loadWallet();
-      loadHistory();
-      loadPendingGames();
-    }, 30000);
+  const loadActiveStalls = useCallback(async () => {
+    try {
+      const res = await api.get("/stall/my-active-stalls");
+      const stalls = res.data || [];
+      setActiveStalls(stalls);
+      setSelectedStallId((prev) => {
+        if (prev && stalls.some((stall) => stall.stall_id === prev)) {
+          return prev;
+        }
+        return stalls[0]?.stall_id || "";
+      });
 
-    return () => clearInterval(interval);
+      if (stalls.length === 0) {
+        setScanning(false);
+      }
+    } catch (error) {
+      setActiveStalls([]);
+      setSelectedStallId("");
+      setMessage("Failed to load active stalls. Ask admin to activate your stall session.");
+      setMessageType("error");
+      setScanning(false);
+    }
   }, []);
 
-  const loadWallet = async () => {
+  const loadWallet = useCallback(async (stallId = selectedStallId) => {
+    if (!stallId) {
+      setWallet(null);
+      return;
+    }
+
     try {
-      const res = await api.get("/stall/wallet");
+      const res = await api.get("/stall/wallet", {
+        params: { stall_id: stallId },
+      });
       setWallet(res.data);
     } catch (error) {
+      if ([400, 403, 404].includes(error.response?.status)) {
+        setWallet(null);
+        return;
+      }
       setMessage("Failed to load wallet information");
       setMessageType("error");
     }
-  };
+  }, [selectedStallId]);
 
-  const loadHistory = async () => {
+  const loadHistory = useCallback(async (stallId = selectedStallId) => {
     try {
-      const res = await api.get("/stall/history");
+      const res = await api.get("/stall/history", {
+        params: stallId ? { stall_id: stallId } : {},
+      });
       setPlays(res.data || []);
     } catch (error) {
       setMessage("Failed to load play history");
       setMessageType("error");
     }
-  };
+  }, [selectedStallId]);
 
-  const loadPendingGames = async () => {
+  const loadPendingGames = useCallback(async (stallId = selectedStallId) => {
     try {
-      const res = await api.get("/stall/pending-games");
+      const res = await api.get("/stall/pending-games", {
+        params: stallId ? { stall_id: stallId } : {},
+      });
       setPendingGames(res.data || []);
     } catch (error) {
       console.error("Failed to load pending games:", error);
     }
-  };
+  }, [selectedStallId]);
+
+  useEffect(() => {
+    loadActiveStalls();
+    loadHistory(selectedStallId);
+    
+    // Auto-refresh every 30 seconds for real-time updates
+    const interval = setInterval(() => {
+      loadActiveStalls();
+      loadWallet(selectedStallId);
+      loadHistory(selectedStallId);
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, [loadActiveStalls, loadWallet, loadHistory, selectedStallId]);
+
+  useEffect(() => {
+    loadWallet(selectedStallId);
+  }, [selectedStallId, loadWallet]);
+
+  useEffect(() => {
+    loadPendingGames(selectedStallId);
+  }, [selectedStallId, loadPendingGames]);
+
+  useEffect(() => {
+    loadHistory(selectedStallId);
+  }, [selectedStallId, loadHistory]);
 
   /* ---------------- QR SCAN ---------------- */
 
-  const handleQRScan = async (qrData) => {
+  const handleQRScan = useCallback(async (qrData) => {
     // Validate QR data structure
     if (!qrData || typeof qrData !== 'object') {
       setMessage("Invalid QR code format");
@@ -140,11 +197,36 @@ const StallDashboard = () => {
       return;
     }
 
+    const now = Date.now();
+    if (scanStateRef.current.inFlight) {
+      return;
+    }
+    if (
+      scanStateRef.current.walletId === walletId &&
+      now - scanStateRef.current.timestamp < 5000
+    ) {
+      return;
+    }
+
+    const stallId = selectedStallId || activeStalls[0]?.stall_id;
+    if (!stallId) {
+      setMessage("No active stall selected. Ask admin to activate your stall session.");
+      setMessageType("error");
+      setScanning(false);
+      return;
+    }
+
     if (loading || currentPlay) {
       setMessage("Game already in progress");
       setMessageType("warning");
       return;
     }
+
+    scanStateRef.current = {
+      inFlight: true,
+      walletId,
+      timestamp: now,
+    };
 
     setLoading(true);
     setMessage("Checking visitor balance...");
@@ -167,6 +249,7 @@ const StallDashboard = () => {
 
       const res = await api.post("/stall/play", {
         visitor_wallet: walletId,
+        stall_id: stallId,
       });
 
       setCurrentPlay({
@@ -174,6 +257,7 @@ const StallDashboard = () => {
         visitor_wallet: walletId,
         visitor_username: qrData.username || visitorData.username,
         visitor_balance: visitorData.balance,
+        stall_id: stallId,
       });
 
       setTimeout(() => {
@@ -199,10 +283,15 @@ const StallDashboard = () => {
       
       setMessage(errorMsg);
       setMessageType("error");
+    } finally {
+      scanStateRef.current = {
+        inFlight: false,
+        walletId,
+        timestamp: Date.now(),
+      };
+      setLoading(false);
     }
-
-    setLoading(false);
-  };
+  }, [activeStalls, currentPlay, loading, selectedStallId]);
 
   /* ---------------- SUBMIT SCORE ---------------- */
 
@@ -224,6 +313,11 @@ const StallDashboard = () => {
       setCurrentPlay(null);
       setSelectedPendingGame(null);
       setScore("");
+      scanStateRef.current = {
+        inFlight: false,
+        walletId: "",
+        timestamp: 0,
+      };
       
       // Auto-switch back to scanner after 3 seconds
       setTimeout(() => {
@@ -231,10 +325,10 @@ const StallDashboard = () => {
         setMessage("Ready for next game");
         setMessageType("info");
       }, 3000);
-      
-      loadHistory();
-      loadPendingGames();
-      loadWallet();
+
+      loadHistory(selectedStallId);
+      loadPendingGames(selectedStallId);
+      loadWallet(selectedStallId);
     } catch (err) {
       setMessage(err.response?.data?.error || "Score submission failed");
       setMessageType("error");
@@ -252,6 +346,14 @@ const StallDashboard = () => {
     setMessageType("info");
   };
 
+  const handleScannerError = useCallback((e) => {
+    setMessage(`Scanner Error: ${e.message}`);
+    setMessageType("error");
+    if (e.message.includes("Camera permission")) {
+      setScanning(false);
+    }
+  }, []);
+
   // Memoize expensive operations
   const memoizedPlays = React.useMemo(() => {
     return plays.map((p) => ({
@@ -262,6 +364,8 @@ const StallDashboard = () => {
         : "No ID",
     }));
   }, [plays]);
+
+  const selectedStall = activeStalls.find((stall) => stall.stall_id === selectedStallId);
 
 
   return (
@@ -284,7 +388,9 @@ const StallDashboard = () => {
           Stall Dashboard
         </h1>
         <div className="premium-badge">
-          GAME OPERATOR
+          {selectedStall?.stall_name
+            ? `OPERATOR-${selectedStall.stall_name.toUpperCase()}`
+            : "OPERATOR-UNASSIGNED"}
         </div>
       </div>
 
@@ -323,10 +429,43 @@ const StallDashboard = () => {
             </ul>
             <p className="info-tip">TIP: Press Enter to start scanner, ESC to stop</p>
           </div>
+
+          <div className="mb-md">
+            <label className="mb-sm" style={{ display: "block", fontWeight: 700 }}>
+              Active Stall
+            </label>
+            <select
+              className="input"
+              value={selectedStallId}
+              onChange={(e) => {
+                setSelectedStallId(e.target.value);
+                setCurrentPlay(null);
+                setSelectedPendingGame(null);
+                setScanning(false);
+              }}
+              disabled={loading || activeStalls.length === 0}
+            >
+              {activeStalls.length === 0 && <option value="">No active stalls found</option>}
+              {activeStalls.map((stall) => (
+                <option key={stall.stall_id} value={stall.stall_id}>
+                  {stall.stall_name} ({stall.price_per_play} pts/play)
+                </option>
+              ))}
+            </select>
+            {selectedStall && (
+              <p className="mt-sm" style={{ fontSize: "13px", color: "#6b7280" }}>
+                Selected: <strong>{selectedStall.stall_name}</strong>
+              </p>
+            )}
+          </div>
           
           {!scanning && (
-            <button className="btn btn-primary btn-lg btn-full" onClick={() => setScanning(true)}>
-            Start Scanner
+            <button
+              className="btn btn-primary btn-lg btn-full"
+              onClick={() => setScanning(true)}
+              disabled={!selectedStallId || loading}
+            >
+              {!selectedStallId ? "No Active Stall Available" : "Start Scanner"}
             </button>
           )}
 
@@ -335,13 +474,7 @@ const StallDashboard = () => {
               <QRScanner
                 isActive={true}
                 onScan={handleQRScan}
-                onError={(e) => {
-                  setMessage(`Scanner Error: ${e.message}`);
-                  setMessageType("error");
-                  if (e.message.includes("Camera permission")) {
-                    setScanning(false);
-                  }
-                }}
+                onError={handleScannerError}
               />
               <button 
                 className="btn btn-secondary btn-full mt-md" 
@@ -398,20 +531,24 @@ const StallDashboard = () => {
                   <tbody>
                     {pendingGames.map((game) => {
                       const nowUTC = Date.now();
+                      const createdAt = game.created_at || "";
                       const gameUTC = Date.parse(
-                        game.created_at.endsWith("Z")
-                          ? game.created_at
-                          : game.created_at + "Z"
+                        createdAt.endsWith("Z")
+                          ? createdAt
+                          : createdAt
+                            ? createdAt + "Z"
+                            : ""
                       );
-
-                      const timeAgo = Math.floor((nowUTC - gameUTC) / (1000 * 60));
+                      const timeAgo = Number.isNaN(gameUTC)
+                        ? 0
+                        : Math.floor((nowUTC - gameUTC) / (1000 * 60));
 
 
                       return (
-                        <tr key={game.id}>
+                        <tr key={game.transaction_id}>
                           <td data-label="Visitor">
                             <span className="wallet-id">
-                              {game.from_wallet ? `${game.from_wallet.slice(0, 8)}...` : "No ID"}
+                              {game.visitor_wallet ? `${game.visitor_wallet.slice(0, 8)}...` : "No ID"}
                             </span>
                           </td>
                           <td data-label="Username">
@@ -563,29 +700,37 @@ const StallDashboard = () => {
                 </tr>
               </thead>
               <tbody>
-                {memoizedPlays.map((p) => (
-                  <tr key={p.transaction_id}>
-                    <td data-label="Visitor">
-                      <span className="wallet-id">{p.visitorId}</span>
-                    </td>
-                    <td data-label="Username">
-                      <strong className="username">{p.visitor_username || "Unknown User"}</strong>
-                    </td>
-                    <td data-label="Score">
-                      {p.score !== null ? (
-                        <span className="score-value">{p.score}</span>
-                      ) : (
-                        <span className="badge badge-danger">Pending</span>
-                      )}
-                    </td>
-                    <td data-label="Points">
-                      <span className="points-value">{p.points || 0} pts</span>
-                    </td>
-                    <td data-label="Date">
-                      <span className="date-text">{p.formattedDate}</span>
+                {memoizedPlays.length === 0 ? (
+                  <tr>
+                    <td colSpan="5" style={{ textAlign: "center", color: "#6b7280" }}>
+                      No play history found for the selected stall yet.
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  memoizedPlays.map((p) => (
+                    <tr key={p.transaction_id}>
+                      <td data-label="Visitor">
+                        <span className="wallet-id">{p.visitorId}</span>
+                      </td>
+                      <td data-label="Username">
+                        <strong className="username">{p.visitor_username || "Unknown User"}</strong>
+                      </td>
+                      <td data-label="Score">
+                        {p.score !== null ? (
+                          <span className="score-value">{p.score}</span>
+                        ) : (
+                          <span className="badge badge-danger">Pending</span>
+                        )}
+                      </td>
+                      <td data-label="Points">
+                        <span className="points-value">{p.points || 0} pts</span>
+                      </td>
+                      <td data-label="Date">
+                        <span className="date-text">{p.formattedDate}</span>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -595,7 +740,13 @@ const StallDashboard = () => {
       {/* -------- WALLET -------- */}
       {activeTab === "wallet" && wallet && (
         <div className="card club-pattern">
-          <h3 className="card-title">My Wallet</h3>
+          <h3 className="card-title">
+            {wallet.stall_name
+              ? `Operator - ${wallet.stall_name}`
+              : selectedStall?.stall_name
+                ? `Operator - ${selectedStall.stall_name}`
+                : "My Wallet"}
+          </h3>
           
           <div className="wallet-display">
             <div className="wallet-balance">
@@ -604,14 +755,33 @@ const StallDashboard = () => {
             </div>
             
             <div className="wallet-status">
-              <span className={`badge ${wallet.is_active ? 'badge-success' : 'badge-danger'}`}>
-                {wallet.is_active ? "Active" : "Frozen"}
-              </span>
+              <span className="badge badge-success">Session Active</span>
             </div>
           </div>
 
           <div className="help-text">
             <p>Auto-refreshes every 30 seconds</p>
+            {wallet.is_active === false && (
+              <p>Wallet flag is frozen in DB. Check Debug tab or ask admin to review wallet status.</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {activeTab === "wallet" && !wallet && (
+        <div className="card club-pattern">
+          <h3 className="card-title">
+            {selectedStall?.stall_name
+              ? `Operator - ${selectedStall.stall_name}`
+              : "My Wallet"}
+          </h3>
+          <div className="help-text">
+            <p>
+              {selectedStall
+                ? `Wallet not available for ${selectedStall.stall_name} right now.`
+                : "No active stall selected."}
+            </p>
+            <p>Select an active stall in Scanner tab to view stall wallet balance.</p>
           </div>
         </div>
       )}
@@ -620,7 +790,7 @@ const StallDashboard = () => {
       {activeTab === "debug" && (
         <div className="card club-pattern">
           <h3 className="card-title">Debug Tools</h3>
-          <QRDebugger />
+          <QRDebugger mode="operator" selectedStallId={selectedStallId} />
         </div>
       )}
     </div>

@@ -57,47 +57,6 @@ def setup_logging(app):
 
 
 def setup_cors(app):
-    """Configure CORS settings with detailed logging"""
-    # For local development, be more permissive
-    allowed_origins = ['http://localhost:3000', 'http://127.0.0.1:3000']
-    
-    # Add production origins if specified
-    env_origins = os.getenv('ALLOWED_ORIGINS', '')
-    if env_origins:
-        env_origins_list = [origin.strip() for origin in env_origins.split(',') if origin.strip()]
-        allowed_origins.extend(env_origins_list)
-    
-    app.logger.info(f'CORS allowed origins: {allowed_origins}')
-    
-    # Use more permissive CORS for local development
-    CORS(
-        app,
-        resources={
-            r"/api/*": {
-                "origins": allowed_origins,
-                "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-                "allow_headers": ["Content-Type", "Authorization", "Accept", "Origin", "X-Requested-With", "X-Visitor-Wallet-ID"],
-                "supports_credentials": True,
-                "max_age": 86400
-            }
-        }
-    )
-    
-    # Add CORS logging middleware
-    @app.before_request
-    def log_cors_info():
-        if request.method == 'OPTIONS':
-            app.logger.info(f'CORS preflight: {request.method} {request.url}')
-            app.logger.info(f'Origin: {request.headers.get("Origin", "None")}')
-            app.logger.info(f'Access-Control-Request-Method: {request.headers.get("Access-Control-Request-Method", "None")}')
-            app.logger.info(f'Access-Control-Request-Headers: {request.headers.get("Access-Control-Request-Headers", "None")}')
-        else:
-            app.logger.info(f'Request: {request.method} {request.url}')
-            app.logger.info(f'Origin: {request.headers.get("Origin", "None")}')
-            app.logger.info(f'Content-Type: {request.headers.get("Content-Type", "None")}')
-
-
-def setup_cors(app):
     """Configure CORS settings"""
     allowed_origins = os.getenv('ALLOWED_ORIGINS', 'http://localhost:3000').split(',')
     
@@ -161,6 +120,12 @@ def register_blueprints(app):
         return jsonify({
             "message": "Debug endpoint working",
             "timestamp": datetime.utcnow().isoformat(),
+            "debug_routes": {
+                "public": ["/api/debug", "/api/health", "/api/info"],
+                "operator": ["/api/stall/debug", "/api/stall/my-active-stalls", "/api/stall/wallet?stall_id=<stall_id>"],
+                "visitor": ["/api/visitor/debug/topup", "/api/visitor/wallet"],
+                "admin": ["/api/admin/storage-debug", "/api/admin/storage-debug?user_id=<user_id>"]
+            },
             "request_info": {
                 "method": request.method,
                 "url": request.url,
