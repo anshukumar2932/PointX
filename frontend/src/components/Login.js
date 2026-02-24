@@ -47,11 +47,15 @@ const Login = () => {
 
       const btnContainer = document.getElementById("googleSignInBtn");
       if (btnContainer) {
+        const viewportWidth = window.innerWidth || 360;
+        const dynamicWidth = Math.min(350, Math.max(220, viewportWidth - 48));
+        btnContainer.innerHTML = "";
+
         // eslint-disable-next-line no-undef
         google.accounts.id.renderButton(btnContainer, { 
           theme: "outline", 
           size: "large", 
-          width: 350,
+          width: dynamicWidth,
           text: "signin_with",
           shape: "rectangular",
         });
@@ -115,14 +119,14 @@ const Login = () => {
           animation: 'fadeIn 0.3s ease-in'
         }}>
           <div style={{
-            fontSize: '120px',
+            fontSize: 'clamp(64px, 24vw, 120px)',
             marginBottom: '20px',
             animation: 'celebrationBounce 0.6s ease-in-out infinite'
           }}>
             🏰
           </div>
           <div style={{
-            fontSize: '32px',
+            fontSize: 'clamp(22px, 7vw, 32px)',
             fontWeight: '900',
             color: 'white',
             textAlign: 'center',
@@ -133,13 +137,13 @@ const Login = () => {
             WELCOME HOME!
           </div>
           <div style={{
-            fontSize: '48px',
+            fontSize: 'clamp(30px, 12vw, 48px)',
             animation: 'hotdogDance 0.5s ease-in-out infinite'
           }}>
             🌭
           </div>
           <div style={{
-            fontSize: '18px',
+            fontSize: 'clamp(11px, 3.6vw, 18px)',
             color: '#fbbf24',
             fontWeight: '700',
             marginTop: '16px',
@@ -155,7 +159,7 @@ const Login = () => {
         marginBottom: '20px',
         animation: 'bounce 2s ease-in-out infinite'
       }}>
-        <div style={{ fontSize: '60px', marginBottom: '10px' }}>
+        <div style={{ fontSize: 'clamp(40px, 14vw, 60px)', marginBottom: '10px' }}>
           🏰
         </div>
         <div style={{
@@ -173,7 +177,7 @@ const Login = () => {
         </div>
       </div>
 
-      <div className="card club-pattern" style={{ maxWidth: '450px', margin: '40px auto', position: 'relative' }}>
+      <div className="card club-pattern login-card">
         {/* Character decorations */}
         <div style={{
           position: 'absolute',
@@ -212,11 +216,11 @@ const Login = () => {
               boxShadow: '0 0 20px rgba(220, 38, 38, 0.8)'
             }}></div>
             <div style={{ 
-              fontSize: '48px', 
+              fontSize: 'clamp(30px, 12vw, 48px)', 
               fontWeight: '900',
               color: '#1f2937',
               textTransform: 'uppercase',
-              letterSpacing: '4px',
+              letterSpacing: 'clamp(1px, 1vw, 4px)',
               position: 'relative'
             }}>
               POINT

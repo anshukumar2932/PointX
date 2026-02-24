@@ -33,6 +33,10 @@ const StallDashboard = () => {
   const [activeStalls, setActiveStalls] = useState([]);
   const [selectedStallId, setSelectedStallId] = useState("");
   const [selectedPendingGame, setSelectedPendingGame] = useState(null);
+  const [isMobileView, setIsMobileView] = useState(() =>
+    typeof window !== "undefined" ? window.innerWidth < 768 : false
+  );
+  const [mobileTabMenuOpen, setMobileTabMenuOpen] = useState(false);
   const scanStateRef = useRef({
     inFlight: false,
     walletId: "",
@@ -58,24 +62,88 @@ const StallDashboard = () => {
     });
   };
 
+  const getPendingTimeAgo = (createdAt) => {
+    if (!createdAt) return 0;
+    const parsed = Date.parse(
+      createdAt.endsWith("Z") ? createdAt : createdAt + "Z"
+    );
+    if (Number.isNaN(parsed)) return 0;
+    return Math.floor((Date.now() - parsed) / (1000 * 60));
+  };
 
-  
+
+  const tabDefinitions = React.useMemo(
+    () => [
+      { key: "scanner", label: "Scanner" },
+      { key: "pending", label: `Pending (${pendingGames.length})` },
+      { key: "score", label: "Score" },
+      { key: "history", label: "History" },
+      { key: "wallet", label: "Wallet" },
+      { key: "debug", label: "Debug" },
+    ],
+    [pendingGames.length]
+  );
+
+  const isScoreTabDisabled = !currentPlay && !selectedPendingGame;
+  const activeTabLabel =
+    tabDefinitions.find((tab) => tab.key === activeTab)?.label || "Dashboard";
+
+  const handleTabChange = useCallback(
+    (tabKey) => {
+      if (tabKey === "score" && isScoreTabDisabled) {
+        return;
+      }
+      setActiveTab(tabKey);
+      setMobileTabMenuOpen(false);
+    },
+    [isScoreTabDisabled]
+  );
+
+  useEffect(() => {
+    const handleResize = () => {
+      const mobile = window.innerWidth < 768;
+      setIsMobileView(mobile);
+      if (!mobile) {
+        setMobileTabMenuOpen(false);
+      }
+    };
+
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  useEffect(() => {
+    setMobileTabMenuOpen(false);
+  }, [activeTab]);
 
   useEffect(() => {
     const handleKeyPress = (event) => {
-      // ESC key to stop scanning
-      if (event.key === 'Escape' && scanning) {
-        setScanning(false);
+      if (event.key === "Escape") {
+        if (mobileTabMenuOpen) {
+          setMobileTabMenuOpen(false);
+          return;
+        }
+        if (scanning) {
+          setScanning(false);
+        }
       }
       // Enter key to start scanning when not scanning
-      if (event.key === 'Enter' && !scanning && activeTab === 'scanner' && !loading && selectedStallId) {
+      if (
+        event.key === "Enter" &&
+        !mobileTabMenuOpen &&
+        !scanning &&
+        activeTab === "scanner" &&
+        !loading &&
+        selectedStallId
+      ) {
         setScanning(true);
       }
     };
 
-    window.addEventListener('keydown', handleKeyPress);
-    return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [scanning, activeTab, loading, selectedStallId]);
+    window.addEventListener("keydown", handleKeyPress);
+    return () => window.removeEventListener("keydown", handleKeyPress);
+  }, [mobileTabMenuOpen, scanning, activeTab, loading, selectedStallId]);
 
   const loadActiveStalls = useCallback(async () => {
     try {
@@ -369,22 +437,9 @@ const StallDashboard = () => {
 
 
   return (
-    <div className="container">
-      <div style={{
-        textAlign: 'center',
-        marginBottom: '24px'
-      }}>
-        <h1 style={{
-          fontSize: '36px',
-          fontWeight: '900',
-          background: 'linear-gradient(135deg, #dc2626 0%, #7f1d1d 100%)',
-          WebkitBackgroundClip: 'text',
-          WebkitTextFillColor: 'transparent',
-          backgroundClip: 'text',
-          textTransform: 'uppercase',
-          letterSpacing: '2px',
-          marginBottom: '8px'
-        }}>
+    <div className="container stall-dashboard-container">
+      <div className="stall-dashboard-header">
+        <h1 className="stall-dashboard-title">
           Stall Dashboard
         </h1>
         <div className="premium-badge">
@@ -394,18 +449,72 @@ const StallDashboard = () => {
         </div>
       </div>
 
-      <div className="tab-nav">
-        {["scanner", "pending", "score", "history", "wallet", "debug"].map((tab) => (
+      <div className="tab-nav stall-desktop-tab-nav">
+        {tabDefinitions.map((tab) => (
           <button
-            key={tab}
-            className={`tab-button ${activeTab === tab ? "active" : ""}`}
-            onClick={() => setActiveTab(tab)}
-            disabled={tab === "score" && !currentPlay && !selectedPendingGame}
+            key={tab.key}
+            className={`tab-button ${activeTab === tab.key ? "active" : ""}`}
+            onClick={() => handleTabChange(tab.key)}
+            disabled={tab.key === "score" && isScoreTabDisabled}
           >
-            {tab === "pending" ? `Pending (${pendingGames.length})` : tab.charAt(0).toUpperCase() + tab.slice(1)}
+            {tab.label}
           </button>
         ))}
       </div>
+
+      {isMobileView && (
+        <div className="stall-mobile-tab-trigger-bar">
+          <span className="stall-mobile-tab-pill">{activeTabLabel}</span>
+          <button
+            type="button"
+            className="stall-mobile-tab-open"
+            onClick={() => setMobileTabMenuOpen(true)}
+          >
+            Change Tab
+          </button>
+        </div>
+      )}
+
+      {isMobileView && mobileTabMenuOpen && (
+        <div
+          className="stall-mobile-tab-popup"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Switch dashboard tab"
+          onClick={() => setMobileTabMenuOpen(false)}
+        >
+          <div
+            className="stall-mobile-tab-sheet"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="stall-mobile-tab-sheet-header">
+              <h3>Switch View</h3>
+              <button
+                type="button"
+                className="stall-mobile-tab-close"
+                onClick={() => setMobileTabMenuOpen(false)}
+              >
+                Close
+              </button>
+            </div>
+            <div className="stall-mobile-tab-grid">
+              {tabDefinitions.map((tab) => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  className={`stall-mobile-tab-option ${
+                    activeTab === tab.key ? "active" : ""
+                  }`}
+                  onClick={() => handleTabChange(tab.key)}
+                  disabled={tab.key === "score" && isScoreTabDisabled}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {message && (
         <MessageAlert 
@@ -419,22 +528,13 @@ const StallDashboard = () => {
       {activeTab === "scanner" && (
         <div className="card club-pattern">
           <h3 className="card-title">QR Scanner</h3>
-          
-          <div className="info-box mb-md">
-            <h4 className="info-title"> Instructions</h4>
-            <ul className="info-list">
-              <li>Ask visitor to show their wallet QR code</li>
-              <li>Position QR code in the camera frame</li>
-              <li>Wait for automatic scan and game start</li>
-            </ul>
-            <p className="info-tip">TIP: Press Enter to start scanner, ESC to stop</p>
-          </div>
 
           <div className="mb-md">
             <label className="mb-sm" style={{ display: "block", fontWeight: 700 }}>
-              Active Stall
+              Active Stall :{" "}
+              <strong>{selectedStall?.stall_name || "UNASSIGNED"}</strong>
             </label>
-            <select
+            {/* <select
               className="input"
               value={selectedStallId}
               onChange={(e) => {
@@ -451,12 +551,12 @@ const StallDashboard = () => {
                   {stall.stall_name} ({stall.price_per_play} pts/play)
                 </option>
               ))}
-            </select>
-            {selectedStall && (
+            </select> */}
+            {/* {selectedStall && (
               <p className="mt-sm" style={{ fontSize: "13px", color: "#6b7280" }}>
                 Selected: <strong>{selectedStall.stall_name}</strong>
               </p>
-            )}
+            )} */}
           </div>
           
           {!scanning && (
@@ -490,6 +590,16 @@ const StallDashboard = () => {
               <p>Having trouble? Make sure camera permissions are enabled and the QR code is clearly visible.</p>
             </div>
           )}
+
+          <div className="info-box mb-md">
+            <h4 className="info-title"> Instructions</h4>
+            <ul className="info-list">
+              <li>Ask visitor to show their wallet QR code</li>
+              <li>Position QR code in the camera frame</li>
+              <li>Wait for automatic scan and game start</li>
+            </ul>
+            <p className="info-tip">TIP: Press Enter to start scanner, ESC to stop</p>
+          </div>
         </div>
       )}
 
@@ -517,8 +627,8 @@ const StallDashboard = () => {
             </div>
           ) : (
             <>              
-              <div className="table-container">
-                <table className="table">
+              <div className="pending-desktop-view table-container">
+                <table className="table table-mobile">
                   <thead>
                     <tr>
                       <th>Visitor</th>
@@ -530,18 +640,7 @@ const StallDashboard = () => {
                   </thead>
                   <tbody>
                     {pendingGames.map((game) => {
-                      const nowUTC = Date.now();
-                      const createdAt = game.created_at || "";
-                      const gameUTC = Date.parse(
-                        createdAt.endsWith("Z")
-                          ? createdAt
-                          : createdAt
-                            ? createdAt + "Z"
-                            : ""
-                      );
-                      const timeAgo = Number.isNaN(gameUTC)
-                        ? 0
-                        : Math.floor((nowUTC - gameUTC) / (1000 * 60));
+                      const timeAgo = getPendingTimeAgo(game.created_at);
 
 
                       return (
@@ -577,6 +676,51 @@ const StallDashboard = () => {
                     })}
                   </tbody>
                 </table>
+              </div>
+
+              <div className="pending-mobile-view">
+                {pendingGames.map((game) => {
+                  const timeAgo = getPendingTimeAgo(game.created_at);
+
+                  return (
+                    <div className="pending-mobile-card" key={game.transaction_id}>
+                      <div className="pending-mobile-top">
+                        <strong className="pending-mobile-name">
+                          {game.visitor_username || "Unknown User"}
+                        </strong>
+                        <span
+                          className={`time-badge ${
+                            timeAgo > 60 ? "urgent" : timeAgo > 30 ? "warning" : "recent"
+                          }`}
+                        >
+                          {timeAgo < 1 ? "Just now" : `${timeAgo}m ago`}
+                        </span>
+                      </div>
+
+                      <div className="pending-mobile-meta">
+                        <div className="pending-mobile-meta-row">
+                          <span className="pending-mobile-label">Visitor</span>
+                          <span className="wallet-id">
+                            {game.visitor_wallet
+                              ? `${game.visitor_wallet.slice(0, 8)}...`
+                              : "No ID"}
+                          </span>
+                        </div>
+                        <div className="pending-mobile-meta-row">
+                          <span className="pending-mobile-label">Started</span>
+                          <span className="date-text">{formatUTC(game.created_at)}</span>
+                        </div>
+                      </div>
+
+                      <button
+                        className="btn btn-primary btn-full"
+                        onClick={() => selectPendingGame(game)}
+                      >
+                        Submit Score
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             </>
           )}
@@ -689,7 +833,7 @@ const StallDashboard = () => {
         <div className="card club-pattern">
           <h3 className="card-title">Play History</h3>
           <div className="table-container">
-            <table className="table">
+            <table className="table table-mobile">
               <thead>
                 <tr>
                   <th>Visitor</th>

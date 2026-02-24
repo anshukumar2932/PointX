@@ -5,6 +5,7 @@ import QRDebugger from "./QRDebugger";
 import ClubLoader from "./ClubLoader";
 import api from "../api/axios";
 import MessageAlert from "./MessageAlert";
+import DashboardTabSwitcher from "./DashboardTabSwitcher";
 
 import {
   createUser,
@@ -837,6 +838,21 @@ const AdminDashboard = () => {
   );
 
   const isBusy = loading || actionLoading;
+  const adminTabs = React.useMemo(
+    () => [
+      { key: "overview", label: "Overview" },
+      { key: "users", label: "Users" },
+      { key: "wallets", label: "Wallets" },
+      { key: "operators", label: "Operators" },
+      { key: "attendance", label: "Attendance" },
+      { key: "plays", label: "Plays" },
+      { key: "topups", label: "Topups" },
+      { key: "leaderboard", label: "Leaderboard" },
+      { key: "create", label: "Create" },
+      { key: "qr-debug", label: "QR Debug" },
+    ],
+    []
+  );
 
   // ────────────────────────────────────────────────
   // RENDER
@@ -844,21 +860,8 @@ const AdminDashboard = () => {
 
   return (
     <div className="container">
-      <div style={{
-        textAlign: 'center',
-        marginBottom: '24px'
-      }}>
-        <h1 style={{
-          fontSize: '36px',
-          fontWeight: '900',
-          background: 'linear-gradient(135deg, #dc2626 0%, #7f1d1d 100%)',
-          WebkitBackgroundClip: 'text',
-          WebkitTextFillColor: 'transparent',
-          backgroundClip: 'text',
-          textTransform: 'uppercase',
-          letterSpacing: '2px',
-          marginBottom: '8px'
-        }}>
+      <div className="dashboard-page-header">
+        <h1 className="dashboard-page-title">
           Admin Dashboard
         </h1>
         <div className="premium-badge">
@@ -866,18 +869,13 @@ const AdminDashboard = () => {
         </div>
       </div>
 
-      <div className="tab-nav">
-        {["overview", "users", "wallets", "operators", "attendance", "plays", "topups", "leaderboard", "create", "qr-debug"].map(tab => (
-          <button
-            key={tab}
-            className={`tab-button ${activeTab === tab ? "active" : ""}`}
-            onClick={() => setActiveTab(tab)}
-            disabled={isBusy}
-          >
-            {tab === "qr-debug" ? "QR Debug" : tab.charAt(0).toUpperCase() + tab.slice(1)}
-          </button>
-        ))}
-      </div>
+      <DashboardTabSwitcher
+        activeTab={activeTab}
+        tabs={adminTabs}
+        onTabChange={setActiveTab}
+        isBusy={isBusy}
+        dialogLabel="Switch admin dashboard tab"
+      />
 
       {message && (
         <MessageAlert 

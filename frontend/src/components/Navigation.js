@@ -24,9 +24,9 @@ const Navigation = () => {
           <span className="member-badge hidden-mobile">
             {getRoleIcon(user.role)} - {user.username}
           </span>
-          <span className="member-badge hidden-desktop">
+          {/* <span className="member-badge hidden-desktop">
             {user.username}
-          </span>
+          </span> */}
           <button 
             onClick={logout}
             className="btn btn-secondary btn-sm"

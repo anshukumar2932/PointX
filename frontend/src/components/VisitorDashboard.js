@@ -4,6 +4,7 @@ import QRGenerator from "./QRGenerator";
 import ClubLoader from "./ClubLoader";
 import { useAuth } from "../context/AuthContext";
 import MessageAlert from "./MessageAlert";
+import DashboardTabSwitcher from "./DashboardTabSwitcher";
 
 const VisitorDashboard = () => {
   const { user: authUser, refreshUser } = useAuth();
@@ -86,6 +87,17 @@ const VisitorDashboard = () => {
       // Silent fail for leaderboard
     }
   };
+
+  const visitorTabs = React.useMemo(
+    () => [
+      { key: "wallet", label: "Wallet" },
+      { key: "attendance", label: "Attendance" },
+      { key: "topup", label: "Topup" },
+      { key: "history", label: "History" },
+      { key: "leaderboard", label: "Leaderboard" },
+    ],
+    []
+  );
 
   /* ================= TOPUP REQUEST ================= */
 
@@ -185,21 +197,8 @@ const VisitorDashboard = () => {
 
   return (
     <div className="container">
-      <div style={{
-        textAlign: 'center',
-        marginBottom: '24px'
-      }}>
-        <h1 style={{
-          fontSize: '36px',
-          fontWeight: '900',
-          background: 'linear-gradient(135deg, #dc2626 0%, #7f1d1d 100%)',
-          WebkitBackgroundClip: 'text',
-          WebkitTextFillColor: 'transparent',
-          backgroundClip: 'text',
-          textTransform: 'uppercase',
-          letterSpacing: '2px',
-          marginBottom: '8px'
-        }}>
+      <div className="dashboard-page-header">
+        <h1 className="dashboard-page-title">
           Visitor Dashboard
         </h1>
         <div className="premium-badge">
@@ -207,17 +206,12 @@ const VisitorDashboard = () => {
         </div>
       </div>
 
-      <div className="tab-nav">
-        {["wallet", "attendance", "topup", "history", "leaderboard"].map(tab => (
-          <button
-            key={tab}
-            className={`tab-button ${activeTab === tab ? "active" : ""}`}
-            onClick={() => setActiveTab(tab)}
-          >
-            {tab.charAt(0).toUpperCase() + tab.slice(1)}
-          </button>
-        ))}
-      </div>
+      <DashboardTabSwitcher
+        activeTab={activeTab}
+        tabs={visitorTabs}
+        onTabChange={setActiveTab}
+        dialogLabel="Switch visitor dashboard tab"
+      />
 
       {message && <MessageAlert message={message} type={messageType} onClose={() => setMessage("")} />}
 
