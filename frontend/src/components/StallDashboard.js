@@ -773,7 +773,7 @@ const StallDashboard = () => {
                 type="number"
                 className={`form-input ${scoreError ? 'error' : ''}`}
                 placeholder="Enter score..."
-                step="0.1"
+                step="1"
                 min="0"
                 max="10"
                 value={score}
@@ -786,7 +786,7 @@ const StallDashboard = () => {
                     return;
                   }
 
-                  val = parseFloat(val);
+                  val = parseInt(val);
                   if (val < 0) val = 0;
                   if (val > 10) {
                     val = 10;
