@@ -196,19 +196,30 @@ def bulk_users(data):
             bcrypt.gensalt()
         ).decode()
 
-        user = safe_execute(
-            supabase.table("users").insert({
-                "username": data["username"],
-                "reg_no": data["username"],
-                "password_hash": hashed,
-                "passwd" : data["password"],
-                "role": data.get("role", "visitor")
-            })
-        ).data[0]
+        try:
+            user = safe_execute(
+                supabase.table("users").insert({
+                    "username": data["username"],
+                    "reg_no": data["username"],
+                    "password_hash": hashed,
+                    "passwd": data["password"],
+                    "role": data.get("role", "visitor")
+                })
+            ).data[0]
+
+        except APIError as e:
+            if "duplicate key value" in str(e):
+                users.append({
+                    "username": data["username"],
+                    "status": "duplicate_skipped"
+                })
+                continue
+            else:
+                raise
 
         # Determine initial balance based on role
         if user["role"] == "visitor":
-            balance = 100
+            balance = 60
         elif user["role"] == "admin":
             balance = 10000
         else:
